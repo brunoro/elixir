@@ -1,4 +1,4 @@
-defmodule Debugger.Controller do
+defmodule IEx.Debugger.Controller do
   use GenServer.Behaviour
 
   @server_name { :global, :controller }

@@ -1,6 +1,6 @@
-defmodule Debugger.PIDTable do
+defmodule IEx.Debugger.PIDTable do
   use GenServer.Behaviour
-  alias Debugger.StateServer
+  alias IEx.Debugger.StateServer
 
   @server_name { :global, :pid_table }
 

@@ -1,11 +1,11 @@
-defmodule Debugger.Runner do
-  alias Debugger.StateServer
-  alias Debugger.Evaluator
-  alias Debugger.PIDTable
-  alias Debugger.Runner
-  alias Debugger.Controller
+defmodule IEx.Debugger.Runner do
+  alias IEx.Debugger.StateServer
+  alias IEx.Debugger.Evaluator
+  alias IEx.Debugger.PIDTable
+  alias IEx.Debugger.Runner
+  alias IEx.Debugger.Controller
   
-  import Debugger.Escape
+  import IEx.Debugger.Escape
 
   # functions manipulating state coming from StateServer
   def change_state(fun) do
@@ -255,7 +255,7 @@ defmodule Debugger.Runner do
     if catch_block, do: clauses = 
       Keyword.put clauses, :catch, wrap_next_call(catch_block)
 
-    try_expr = { :try, [context: Debugger.Evaluator, import: Kernel], [clauses] }
+    try_expr = { :try, [context: IEx.Debugger.Evaluator, import: Kernel], [clauses] }
 
     if try_expr do
       do_and_discard_state fn ->

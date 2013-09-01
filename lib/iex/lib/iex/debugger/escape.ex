@@ -1,4 +1,4 @@
-defmodule Debugger.Escape do
+defmodule IEx.Debugger.Escape do
 
   @pid_prefix "__PID_"
   @fun_prefix "__FUN_"

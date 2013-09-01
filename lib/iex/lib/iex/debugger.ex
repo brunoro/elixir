@@ -1,10 +1,9 @@
-defmodule Debugger do
+defmodule IEx.Debugger do
   use Application.Behaviour
+  alias IEx.Debugger.Runner
 
-  alias Debugger.Runner
-
-  def start(_type, _args) do
-    Debugger.Supervisor.start_link
+  def start do
+    IEx.Debugger.Supervisor.start_link
   end
 
   def compile(paths) do

@@ -1,5 +1,5 @@
-defmodule Debugger.Supervisor do
-  alias Debugger.PIDTable
+defmodule IEx.Debugger.Supervisor do
+  alias IEx.Debugger.PIDTable
   use Supervisor.Behaviour
 
   def start_link do
@@ -9,9 +9,8 @@ defmodule Debugger.Supervisor do
   def init([]) do
     children = [
       # Define workers and child supervisors to be supervised
-      worker(Debugger.PIDTable, []),
-      worker(Debugger.Controller, []),
-      worker(Debugger.UI, [])
+      worker(IEx.Debugger.PIDTable, []),
+      worker(IEx.Debugger.Controller, [])
     ]
 
     # See http://elixir-lang.org/docs/stable/Supervisor.Behaviour.html
