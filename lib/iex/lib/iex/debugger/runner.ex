@@ -278,9 +278,6 @@ defmodule Debugger.Runner do
     esc_expr = Macro.escape expr
 
     quote do
-      # TODO: are we using the proper scope?
-      # put the current binding there
-
       case PIDTable.get(self) do
         nil ->
           binding = Kernel.binding
@@ -295,10 +292,11 @@ defmodule Debugger.Runner do
       return = Runner.next(unquote(esc_expr))
       PIDTable.finish(self)
 
-      if Runner.is_status_ok? return do
-        Runner.strip_status return
-      else
-        return
+      case return do
+          { :ok, value } ->
+            value
+          { :exception, kind, reason, stacktrace } ->
+            :erlang.raise(kind, reason, stacktrace)
       end
     end
   end
