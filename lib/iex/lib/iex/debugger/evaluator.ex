@@ -1,5 +1,5 @@
-defmodule Debugger.Evaluator do
-  import Debugger.Escape
+defmodule IEx.Debugger.Evaluator do
+  import IEx.Debugger.Escape
 
   # how to evaluate expressions 
   # TODO: use scope on eval?

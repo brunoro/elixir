@@ -1,4 +1,4 @@
-defmodule Debugger.StateServer do
+defmodule IEx.Debugger.StateServer do
   use GenServer.Behaviour
 
   defrecord State, [binding: nil, scope: nil, stack: []]
