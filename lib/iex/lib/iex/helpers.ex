@@ -14,6 +14,7 @@ defmodule IEx.Helpers do
   * `c/2`       — compiles a file at the given path
   * `cd/1`      — changes the current directory
   * `clear/0`   — clears the screen
+  * `dc/2`      — compiles a file at the given path with debugging calls
   * `flush/0`   — flushes all messages sent to the shell
   * `h/0`       — prints this help message
   * `h/1`       — prints help for the given module, function or macro
@@ -87,6 +88,14 @@ defmodule IEx.Helpers do
     end)
 
     modules ++ Kernel.ParallelCompiler.files_to_path(exs, path)
+  end
+
+  @doc """
+  Compile files for debugging.
+  """
+  def dc(files) do
+    exs = Enum.filter(List.wrap(files), &String.ends_with?(&1, [".ex", ".exs"]))
+    Debugger.compile(exs)
   end
 
   @doc """

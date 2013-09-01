@@ -1,39 +1,35 @@
 defmodule Debugger do
-  alias Debugger.Runner
-  alias Debugger.PIDTable
   use Application.Behaviour
 
-  # See http://elixir-lang.org/docs/stable/Application.Behaviour.html
-  # for more information on OTP Applications
+  alias Debugger.Runner
+
   def start(_type, _args) do
-    IO.puts "here!"
     Debugger.Supervisor.start_link
   end
 
-  defmacro defdebug(header, do: body) do
-    # TODO: binding retrieved via __CALLER__ had all variables as nil
-    { _, _, quoted_params } = header
-    vars = Enum.map quoted_params || [], fn({ var, meta, module }) ->
-      { var, ({ var, meta, module }) }
-    end
-
-    quote do
-      def unquote(header) do
-        binding = unquote(vars)
-        scope = :elixir_scope.to_erl_env(__ENV__)
-        PIDTable.start(self, binding, scope)
-
-        result = Runner.next(unquote(Macro.escape(body)))
-
-        PIDTable.finish(self)
-        
-        case result do
-          { :ok, value } ->
-            value
-          { :exception, kind, reason, stacktrace } ->
-            :erlang.raise(kind, reason, stacktrace)
-        end
+  def compile(paths) do
+    Enum.map paths, fn(path) ->
+      File.open path, [:read], fn(file) ->
+        Enum.reduce(IO.stream(file, :line), [], &([&1 | &2]))
+        |> Enum.reverse
+        |> iolist_to_binary 
+        |> Code.string_to_quoted(file: path)
+        # TODO: we should handle errors from string_to_quoted!!
+        |> Runner.strip_status 
+        |> wrap_quoted
+        |> Code.compile_quoted
       end
     end
   end
-end 
+
+  def wrap_quoted({ :fn, meta, [do: block] }) do
+    { :fn, meta, [do: Runner.wrap_next_call(block)] }
+  end
+  def wrap_quoted({ left, meta, right }) when is_list(right) do
+    { left, meta, Enum.map(right, &wrap_quoted/1) }
+  end
+  def wrap_quoted({ left, meta, right }) do
+    { left, meta, wrap_quoted(right) }
+  end
+  def wrap_quoted(expr), do: expr
+end
