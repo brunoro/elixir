@@ -1,5 +1,5 @@
 -module(elixir_compiler).
--export([get_opt/1, string/2, quoted/2, file/1, file_to_path/2]).
+-export([get_opt/1, string/2, quoted/2, file/1, file_to_path/2, quoted_to_path/3]).
 -export([core/0, module/4, eval_forms/3]).
 -include("elixir.hrl").
 
@@ -43,7 +43,12 @@ file_to_path(File, Path) when is_binary(File), is_binary(Path) ->
   [binary_to_path(X, Path) || X <- Lists],
   Lists.
 
-%% Evaluation
+quoted_to_path(Forms, File, Path) when is_binary(Path) ->
+  Lists = quoted(Forms, File),
+  [binary_to_path(X, Path) || X <- Lists],
+  Lists.
+
+%% Evaluates the contents/forms by compiling them to an Erlang module.
 
 eval_forms(Forms, Vars, E) ->
   case (E#elixir_env.module == nil) andalso allows_fast_compilation(Forms) of
