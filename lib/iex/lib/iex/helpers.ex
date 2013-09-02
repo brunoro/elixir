@@ -93,9 +93,13 @@ defmodule IEx.Helpers do
   @doc """
   Compile files for debugging.
   """
-  def dc(files) do
+  def dc(files, path // ".") do
     exs = Enum.filter(List.wrap(files), &String.ends_with?(&1, [".ex", ".exs"]))
-    Debugger.compile(exs)
+    Enum.map(exs, fn(ex) ->
+      { :ok, modlist } = IEx.Debugger.debug_compile(ex, path)
+      [modules, _binaries] = List.unzip(modlist)
+      modules
+    end) |> List.flatten
   end
 
   @doc """

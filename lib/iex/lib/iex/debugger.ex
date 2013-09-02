@@ -6,18 +6,17 @@ defmodule IEx.Debugger do
     IEx.Debugger.Supervisor.start_link
   end
 
-  def compile(paths) do
-    Enum.map paths, fn(path) ->
-      File.open path, [:read], fn(file) ->
-        Enum.reduce(IO.stream(file, :line), [], &([&1 | &2]))
-        |> Enum.reverse
-        |> iolist_to_binary 
-        |> Code.string_to_quoted(file: path)
-        # TODO: we should handle errors from string_to_quoted!!
-        |> Runner.strip_status 
-        |> wrap_quoted
-        |> Code.compile_quoted
-      end
+  def debug_compile(source, path) do
+    File.open source, [:read], fn(file) ->
+      Enum.reduce(IO.stream(file, :line), [], &([&1 | &2]))
+      |> Enum.reverse
+      |> iolist_to_binary 
+      |> Code.string_to_quoted(file: source)
+      # TODO: we should handle errors from string_to_quoted!!
+      |> Runner.strip_status 
+      |> wrap_quoted
+      |> List.wrap
+      |> :elixir_compiler.quoted_to_path(source, path)
     end
   end
 
