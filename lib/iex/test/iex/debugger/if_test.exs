@@ -2,7 +2,7 @@ Code.require_file "test_helper.exs", __DIR__
 
 defmodule IfTest do
   use ExUnit.Case
-  import Debugger
+  import IEx.Debugger
 
   ## if-else
   defdebug if_else_kv_args_f1, do: if(true, do: 1)
@@ -67,7 +67,9 @@ defmodule IfTest do
     x = 1
     if true do
       x = 2
+      x
       x = 3
+      x
     else true
     end
     x
@@ -77,7 +79,9 @@ defmodule IfTest do
     if true do
       ^x = 1
       x = 2
+      x
       x = 3
+      x
     else true
     end
     x

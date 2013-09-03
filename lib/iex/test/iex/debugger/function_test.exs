@@ -2,7 +2,7 @@ Code.require_file "test_helper.exs", __DIR__
 
 defmodule FunctionTest do
   use ExUnit.Case
-  import Debugger
+  import IEx.Debugger
 
   defdebug sum_list(x) do
     Enum.reduce x, 0, fn(a, b) -> a + b end
@@ -25,7 +25,7 @@ defmodule FunctionTest do
     fun = fn(cap) ->
       cap + 32
     end
-    fun.(10)
+    fun.(cap * 2)
   end
 
   test "anon functions capture variables" do
@@ -37,6 +37,7 @@ defmodule FunctionTest do
     a = 1
     fun = fn ->
       a = 2
+      a
     end
     fun.()
     a

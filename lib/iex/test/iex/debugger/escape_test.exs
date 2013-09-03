@@ -2,7 +2,7 @@ Code.require_file "test_helper.exs", __DIR__
 
 defmodule EscapeTest do
   use ExUnit.Case
-  import Debugger.Escape
+  import IEx.Debugger.Escape
 
   test "escape pid" do
     pid = self

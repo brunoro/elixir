@@ -2,7 +2,7 @@ Code.require_file "test_helper.exs", __DIR__
 
 defmodule ProcessTest do
   use ExUnit.Case
-  import Debugger
+  import IEx.Debugger
   
   defdebug spawn_f1 do
     pid = spawn fn -> self end
@@ -21,7 +21,7 @@ defmodule ProcessTest do
 
   defdebug msg_f1 do
     this = self
-    pid = spawn fn ->
+    _pid = spawn fn ->
       this <- :msg
     end
     receive do

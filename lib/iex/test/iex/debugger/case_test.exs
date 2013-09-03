@@ -2,7 +2,7 @@ Code.require_file "test_helper.exs", __DIR__
 
 defmodule CaseTest do
   use ExUnit.Case
-  import Debugger
+  import IEx.Debugger
 
   ## case
   defdebug case_f1 do
@@ -13,8 +13,8 @@ defmodule CaseTest do
   end
   defdebug case_f2 do
     case 1 do
-      {x,y} -> false
-      x -> true
+      { _x, _y } -> false
+      _x -> true
     end
   end
   defdebug case_f3 do
@@ -41,12 +41,12 @@ defmodule CaseTest do
 
   defdebug case_with_match_do_ambiguity_f1 do
     case x = atom_to_list(true) do
-      _ -> true
+      _ -> x
     end
   end
 
   test "case with match and ambiguity" do
-    assert true  == case_with_match_do_ambiguity_f1
+    assert 'true' == case_with_match_do_ambiguity_f1
   end
 
   defdebug case_with_unary_do_ambiguity_f1 do
@@ -64,7 +64,9 @@ defmodule CaseTest do
     case true do
        true ->
           x = 2
+          x
           x = 3
+          x
       _ -> true
     end
     x
@@ -74,7 +76,9 @@ defmodule CaseTest do
     case 1 do
       ^x -> 
         x = 2
+        x
         x = 3
+        x
       _ -> true
     end
     x
