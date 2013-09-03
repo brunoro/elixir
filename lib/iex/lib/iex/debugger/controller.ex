@@ -22,7 +22,7 @@ defmodule IEx.Debugger.Controller do
   end
 
   def list,            do: :gen_server.call(@server_name, :list)
-  def step(pid),       do: pid <- :go
+  def step(pid),       do: Runner.continue(pid)
   def next(pid, expr), do: :gen_server.cast(@server_name, { :next, pid, expr })
 
   # those should be in UI

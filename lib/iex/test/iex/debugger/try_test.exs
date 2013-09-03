@@ -2,7 +2,7 @@ Code.require_file "test_helper.exs", __DIR__
 
 defmodule TryTest do
   use ExUnit.Case
-  import Debugger
+  import IEx.Debugger
 
   ## try
   defdebug try_f1 do
@@ -16,6 +16,7 @@ defmodule TryTest do
   defdebug try_f2 do
     try do
       x = 1 + "a"
+      x
     rescue
       ArithmeticError -> 1
     end
@@ -73,8 +74,8 @@ defmodule TryTest do
     try do
       1
     else 
-      {x,y} -> false
-      x -> true
+      { _x, _y } -> false
+      _x -> true
     rescue
       ErlangError -> nil
     end

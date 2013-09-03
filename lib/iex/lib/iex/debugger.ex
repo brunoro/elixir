@@ -6,6 +6,16 @@ defmodule IEx.Debugger do
     IEx.Debugger.Supervisor.start_link
   end
 
+  # for testing purposes
+  defmacro defdebug(header, do: body) do
+    wrapped_body = IEx.Debugger.wrap_quoted(body)
+    quote do
+      def unquote(header) do
+        unquote(wrapped_body)
+      end
+    end
+  end
+
   def debug_compile(source, path) do
     File.open source, [:read], fn(file) ->
       Enum.reduce(IO.stream(file, :line), [], &([&1 | &2]))

@@ -2,7 +2,7 @@ Code.require_file "test_helper.exs", __DIR__
 
 defmodule StringTest do
   use ExUnit.Case
-  import Debugger
+  import IEx.Debugger
 
   defdebug interpolate_pid do
     { self, inspect(self) }

@@ -1,3 +1,0 @@
-# ElixirDebuggger
-
-** TODO: Add description **

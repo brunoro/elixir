@@ -2,7 +2,7 @@ Code.require_file "test_helper.exs", __DIR__
 
 defmodule StateServerTest do
   use ExUnit.Case
-  alias Debugger.StateServer
+  alias IEx.Debugger.StateServer
 
   test "put/get state" do
     binding = [a: 1]
