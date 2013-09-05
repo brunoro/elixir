@@ -226,19 +226,10 @@ defmodule IEx.Server do
       else
         :elixir.scope_for_eval(file: "iex", delegate_locals_to: locals)
       end
-
-    { _, _, scope } = :elixir.eval('require IEx.Helpers', [], 0, scope)
-
-    binding = Keyword.get(opts, :binding, [])
-    prefix  = Keyword.get(opts, :prefix, "iex")
-    config  = Config[binding: binding, scope: scope, prefix: prefix]
-
-    case opts[:dot_iex_path] do
-      ""   -> config
-      path -> IEx.Evaluator.load_dot_iex(config, path)
+      eval_dot_iex(config, path)
     end
   end
-
+  
   ## IO
 
   defp io_get(pid, prefix, counter) do
