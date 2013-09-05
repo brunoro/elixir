@@ -2,8 +2,12 @@ defmodule IEx.Debugger do
   use Application.Behaviour
   alias IEx.Debugger.Runner
 
-  def start do
-    IEx.Debugger.Supervisor.start_link
+  def start(opts) do
+    IEx.Debugger.Supervisor.start_link(opts)
+  end
+
+  def stop do
+    IEx.Debugger.Supervisor.stop
   end
 
   # for testing purposes
@@ -33,11 +37,18 @@ defmodule IEx.Debugger do
   def wrap_quoted({ :fn, meta, [do: block] }) do
     { :fn, meta, [do: Runner.wrap_next_call(block)] }
   end
+  def wrap_quoted({ :def, meta, [do: block] }) do
+    { :def, meta, [do: Runner.wrap_next_call(block)] }
+  end
+  def wrap_quoted(expr_list) when is_list(expr_list) do
+    Enum.map(expr_list, &wrap_quoted/1)
+  end
   def wrap_quoted({ left, meta, right }) when is_list(right) do
     { left, meta, Enum.map(right, &wrap_quoted/1) }
   end
   def wrap_quoted({ left, meta, right }) do
     { left, meta, wrap_quoted(right) }
   end
-  def wrap_quoted(expr), do: expr
+  def wrap_quoted({ :do, expr }), do: { :ok, wrap_quoted(expr) }
+  def wrap_quoted(expr), do: IO.inspect expr
 end

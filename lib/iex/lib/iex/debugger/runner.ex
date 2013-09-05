@@ -4,8 +4,6 @@ defmodule IEx.Debugger.Runner do
   alias IEx.Debugger.PIDTable
   alias IEx.Debugger.Runner
   alias IEx.Debugger.Controller
-  
-  import IEx.Debugger.Escape
 
   # functions manipulating state coming from StateServer
   def change_state(fun) do
@@ -60,7 +58,7 @@ defmodule IEx.Debugger.Runner do
     case expanded do
       { :case, _, _ } ->
         do_next(expanded)
-      result ->
+      _result ->
         fun.()
     end
   end

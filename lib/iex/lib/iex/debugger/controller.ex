@@ -3,22 +3,35 @@ defmodule IEx.Debugger.Controller do
 
   @server_name { :global, :controller }
 
-  def start_link do
-    :gen_server.start_link(@server_name, __MODULE__, [], [])
+  def alive? do
+    { _reg, name } = @server_name
+    :global.whereis_name(name) != :undefined
   end
 
-  def init do
-    { :ok, HashDict.new }
+  def start_link(opts) do
+    if alive?, do: :gen_server.call(@server_name, :stop)
+    :gen_server.start_link(@server_name, __MODULE__, opts, [])
+  end
+
+  def init(client_pid) do
+    { :ok, { client_pid, HashDict.new }}
+  end
+
+  def handle_call( :stop, _sender, dict ) do
+    { :stop, :normal, :shutdown_ok, dict }
+  end
+  
+  def handle_call(:list, _sender, { client_pid, expr_table }) do
+    { :reply, expr_table, { client_pid, expr_table }}
   end
 
   # The Controller keeps track of the expressions processes are
   # currently running, being notified through next.
-  def handle_cast({ :next, pid, expr }, expr_table) do
-    { :noreply, Dict.put(expr_table, pid, expr) }
-  end
-  
-  def handle_call(:list, _sender, expr_table) do
-    { :reply, expr_table, expr_table }
+  def handle_cast({ :next, pid, expr }, { client_pid, expr_table }) do
+    if client_pid do
+      client_pid <- { :debug, { :next, pid, expr }}
+    end
+    { :noreply, { client_pid, Dict.put(expr_table, pid, expr) }}
   end
 
   def list,            do: :gen_server.call(@server_name, :list)

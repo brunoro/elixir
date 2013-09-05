@@ -4,12 +4,22 @@ defmodule IEx.Debugger.PIDTable do
 
   @server_name { :global, :pid_table }
 
+  def alive? do
+    { _reg, name } = @server_name
+    :global.whereis_name(name) != :undefined
+  end
+
   def start_link do
+    if alive?, do: :gen_server.call(@server_name, :stop)
     :gen_server.start_link(@server_name, __MODULE__, [], [])
   end
 
-  def init do
+  def init(_opts) do
     { :ok, HashDict.new }
+  end
+
+  def handle_call( :stop, _sender, dict ) do
+    { :stop, :normal, :shutdown_ok, dict }
   end
 
   def handle_call({ :get, pid }, _sender, dict) do
