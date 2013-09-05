@@ -11,8 +11,6 @@ defmodule IEx.Server do
 
   """
   def start(config) do
-    init_systems()
-
     { _, _, scope } = :elixir.eval('require IEx.Helpers', [], 0, config.scope)
     config = config.scope(scope)
 
@@ -25,13 +23,20 @@ defmodule IEx.Server do
     IO.puts "Interactive Elixir (#{System.version}) - press Ctrl+C to exit (type h() ENTER for help)"
 
     old_flag = Process.flag(:trap_exit, true)
-    self_pid = self
-    pid = spawn_link(fn -> input_loop(self_pid) end)
+
+    self_pid  = self
+    input_pid = spawn_link fn -> input_loop(self_pid) end
+    eval_pid  = spawn_link fn -> 
+      # history should be initialized by evaluator process
+      init_systems()
+      eval_loop(self_pid) 
+    end
 
     try do
-      do_loop(config.input_pid(pid))
+      do_loop(config.input_pid(input_pid).eval_pid(eval_pid))
     after
-      Process.exit(pid, :normal)
+      Process.exit(input_pid, :normal)
+      Process.exit(eval_pid, :normal)
       Process.flag(:trap_exit, old_flag)
     end
   end
@@ -46,20 +51,26 @@ defmodule IEx.Server do
     receive do
       { :input, line } ->
         unless line == :eof do
-          new_config =
-            try do
-              counter = config.counter
-              code    = config.cache
-              eval(code, line, counter, config)
-            catch
-              kind, error ->
-                print_error(kind, Exception.normalize(kind, error), System.stacktrace)
-                config.cache('')
-            end
+          config.eval_pid <- { :eval, line, config }
+
+          new_config = receive do
+            { :ok, eval_config } ->
+              eval_config
+            { :error, _kind, _error, _stacktrace } ->
+              config.cache('')
+
+            # exit from eval
+            { :EXIT, _pid, :normal } ->
+              config
+            { :EXIT, pid, reason } ->
+              print_exit(pid, reason)
+              config
+          end
 
           do_loop(new_config)
         end
 
+      # exit from input
       { :EXIT, _pid, :normal } ->
         wait_input(config)
       { :EXIT, pid, reason } ->
@@ -157,7 +168,6 @@ defmodule IEx.Server do
         config.binding(binding).scope(scope)
       catch
         kind, error ->
-          print_error(kind, Exception.normalize(kind, error), System.stacktrace)
           System.halt(1)
       end
     end
@@ -174,6 +184,23 @@ defmodule IEx.Server do
     end
     input_loop(iex_pid)
   end
+
+  defp eval_loop(iex_pid) do
+    receive do
+      { :eval, line, config } ->
+        try do
+          counter = config.counter
+          code    = config.cache
+          iex_pid <- { :ok, eval(code, line, counter, config) }
+        catch
+          kind, error ->
+            print_error(kind, Exception.normalize(kind, error), System.stacktrace)
+            iex_pid <- { :error, kind, error, System.stacktrace }
+        end
+    end
+    eval_loop(iex_pid)
+  end
+
 
   defp io_get(prefix, counter) do
     prefix = if prefix, do: "..."
