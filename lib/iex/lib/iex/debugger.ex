@@ -38,10 +38,10 @@ defmodule IEx.Debugger do
     wrap_do = Enum.map right, fn
       list when is_list(list) ->
         case Keyword.get(list, :do) do
-          do_block ->
-            Keyword.put(list, :do, wrap_quoted(do_block))
           nil ->
             list
+          do_block ->
+            Keyword.put(list, :do, wrap_quoted(do_block))
         end
       expr -> expr
     end

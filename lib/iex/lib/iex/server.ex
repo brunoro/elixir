@@ -58,6 +58,40 @@ defmodule IEx.Server do
           timeout ->
             { :error, :no_iex }
         end
+<<<<<<< HEAD
+=======
+        do_loop(new_config)
+      { :input, ^pid, :eof } ->
+        :ok
+      { :input, ^pid, { :error, :interrupted } } ->
+        io_error "** (EXIT) interrupted"
+        eval_loop(config.cache(''))
+      { :input, ^pid, { :error, :terminated } } ->
+        :ok
+
+      # REPL output
+      { :break, new_config } ->
+        do_loop(new_config)
+      { :more, new_config } ->
+        do_loop(new_config)
+      { :ok, new_config } ->
+        do_loop(new_config)
+      { :error, _kind, _error, _stacktrace } ->
+        do_loop(config.cache(''))
+
+      # TODO: debug events
+      { :debug, { event, pid, expr }} ->
+        IO.puts :stderr, "#{inspect pid}: #{Macro.to_string expr}"
+        do_loop(config)
+
+      # exit from input or eval
+      { :EXIT, pid, reason } ->
+        print_exit(pid, reason)
+        wait_event(config)
+
+      other ->
+        IO.puts :stderr, "#{inspect self} other: #{inspect other}"
+>>>>>>> IEx.Debugger.Controller state is a record
     end
   end
 
