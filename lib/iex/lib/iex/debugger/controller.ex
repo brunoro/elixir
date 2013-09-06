@@ -5,6 +5,8 @@ defmodule IEx.Debugger.Controller do
 
   @server_name { :global, :controller }
 
+  defrecord State, [client: nil, processes: nil, patterns: []]
+
   def alive? do
     { _reg, name } = @server_name
     :global.whereis_name(name) != :undefined
@@ -16,25 +18,25 @@ defmodule IEx.Debugger.Controller do
   end
 
   def init(client_pid) do
-    { :ok, { client_pid, HashDict.new }}
+    { :ok, State[client: client_pid, processes: HashDict.new] }
   end
 
-  def handle_call( :stop, _sender, dict ) do
+  def handle_call(:stop, _sender, dict) do
     { :stop, :normal, :shutdown_ok, dict }
   end
   
-  def handle_call(:list, _sender, { client_pid, expr_table }) do
-    { :reply, expr_table, { client_pid, expr_table }}
+  def handle_call(:list, _sender, state) do
+    { :reply, state.processes, state }
   end
 
-  # The Controller keeps track of the expressions processes are
+  # The Controller keeps track of the processes 
   # currently running, being notified through next.
-  def handle_cast({ :next, pid, expr }, { client_pid, expr_table }) do
-    if client_pid do
-      client_pid <- { :debug, { :next, pid, expr }}
+  def handle_cast({ :next, pid, expr }, state) do
+    if state.client do
+      state.client <- { :debug, { :next, pid, expr }}
     end
     step(pid)
-    { :noreply, { client_pid, Dict.put(expr_table, pid, expr) }}
+    { :noreply, state.processes(Dict.put(state.processes, pid, expr)) }
   end
 
   def list,            do: :gen_server.call(@server_name, :list)
