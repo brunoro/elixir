@@ -1,6 +1,8 @@
 defmodule IEx.Debugger.Controller do
   use GenServer.Behaviour
 
+  alias IEx.Debugger.Runner
+
   @server_name { :global, :controller }
 
   def alive? do
@@ -31,6 +33,7 @@ defmodule IEx.Debugger.Controller do
     if client_pid do
       client_pid <- { :debug, { :next, pid, expr }}
     end
+    step(pid)
     { :noreply, { client_pid, Dict.put(expr_table, pid, expr) }}
   end
 
@@ -48,7 +51,7 @@ defmodule IEx.Debugger.Controller do
   def command(["step", index], proc_list) do
     case Enum.at(proc_list, index) do
       { :ok, { pid, _ }} -> 
-        Controller.step(pid)
+        step(pid)
       :error ->
         IO.puts "invalid index\n"
     end
