@@ -34,14 +34,25 @@ defmodule IEx.Debugger do
     end
   end
 
-  def wrap_quoted({ :fn, meta, [do: block] }) do
-    { :fn, meta, [do: Runner.wrap_next_call(block)] }
+  def wrap_quoted({ :defmodule, meta, right }) do
+    wrap_do = Enum.map right, fn
+      list when is_list(list) ->
+        case Keyword.get(list, :do) do
+          do_block ->
+            Keyword.put(list, :do, wrap_quoted(do_block))
+          nil ->
+            list
+        end
+      expr -> expr
+    end
+    { :defmodule, meta, wrap_do }
   end
-  def wrap_quoted({ :def, meta, [do: block] }) do
-    { :def, meta, [do: Runner.wrap_next_call(block)] }
+  def wrap_quoted({ :fn, meta, clauses }) do
+    { :fn, meta, Enum.map(clauses, Runner.wrap_next_call(&1)) }
   end
-  def wrap_quoted(expr_list) when is_list(expr_list) do
-    Enum.map(expr_list, &wrap_quoted/1)
+  def wrap_quoted({ :def, meta, right }) do
+    [header, [do: body]] = right
+    { :def, meta, [header, [do: Runner.wrap_next_call(body)]] }
   end
   def wrap_quoted({ left, meta, right }) when is_list(right) do
     { left, meta, Enum.map(right, &wrap_quoted/1) }
@@ -49,6 +60,5 @@ defmodule IEx.Debugger do
   def wrap_quoted({ left, meta, right }) do
     { left, meta, wrap_quoted(right) }
   end
-  def wrap_quoted({ :do, expr }), do: { :ok, wrap_quoted(expr) }
-  def wrap_quoted(expr), do: IO.inspect expr
+  def wrap_quoted(expr), do: expr
 end
