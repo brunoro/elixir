@@ -51,9 +51,10 @@ defmodule IfTest do
   defdebug vars_if_f1 do
     if foo = 1 do; true; else false; end; foo
   end
-  defmodule VarsIfTest do
-    defdebug foo, do: 2
-    defdebug bar(x) do if x do; foo = 3; else foo = foo; end; foo; end
+
+  defdebugmodule VarsIfTest do
+    def foo, do: 2
+    def bar(x) do if x do; foo = 3; else foo = foo; end; foo; end
   end
 
   test "binding variables on if-else" do
@@ -61,7 +62,6 @@ defmodule IfTest do
     assert 2 == VarsIfTest.bar(false)
     assert 3 == VarsIfTest.bar(true)
   end
-  # test_helper.run_and_remove(F, ['Elixir.Bar']).
 
   defdebug multi_assigned_if_f1 do
     x = 1
