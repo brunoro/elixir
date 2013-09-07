@@ -19,4 +19,11 @@ defmodule IEx.HelpersTest do
     cleanup_modules([Sample])
   end
 
+  test "add/remove debug patterns" do
+    pattern = %r/.* - .*/ 
+    assert dpg == []
+    assert dps([pattern]) == [pattern]
+    assert dpg == [pattern]
+  end
+
 end

@@ -19,6 +19,15 @@ defmodule IEx.Debugger do
       end
     end
   end
+  defmacro defdebugmodule(name, do: contents) do
+    wrapped_contents = wrap_quoted(contents)
+    quote do
+      defmodule unquote(name) do 
+        unquote(wrapped_contents)
+      end
+    end
+  end
+ 
 
   def debug_compile(source, path) do
     File.open source, [:read], fn(file) ->
