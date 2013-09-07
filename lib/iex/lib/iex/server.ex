@@ -8,6 +8,7 @@ defmodule IEx.Server do
   @doc """
   Finds where the current IEx server is located.
   """
+<<<<<<< HEAD
   @spec whereis :: pid | nil
   def whereis() do
     # Locate top group leader, always registered as user
@@ -26,6 +27,38 @@ defmodule IEx.Server do
             [current_group: group] -> :group.interfaces(group)[:shell]
           end
       end
+=======
+  def start(config) do
+    { _, _, scope } = :elixir.eval('require IEx.Helpers', [], 0, config.scope)
+    config = config.scope(scope)
+
+    config = case config.dot_iex_path do
+      ""   -> config                     # don't load anything
+      nil  -> load_dot_iex(config)       # load .iex from predefined locations
+      path -> load_dot_iex(config, path) # load from `path`
+    end
+
+    IO.puts "Interactive Elixir (#{System.version}) - press Ctrl+C to exit (type h() ENTER for help)"
+
+    old_flag = Process.flag(:trap_exit, true)
+
+    self_pid  = self
+    input_pid = spawn_link fn -> input_loop(self_pid) end
+    eval_pid  = spawn_link fn -> 
+      # history should be initialized by evaluator process
+      IEx.History.init
+      eval_loop(self_pid) 
+    end
+    { :ok, debug_pid } = IEx.Debugger.start(client: self_pid)
+
+    try do
+      do_loop(config.input_pid(input_pid).eval_pid(eval_pid))
+    after
+      Process.exit(input_pid, :normal)
+      Process.exit(eval_pid, :normal)
+      Process.exit(debug_pid, :normal)
+      Process.flag(:trap_exit, old_flag)
+>>>>>>> fixing defdebug and adding debugger helper tests
     end
   end
 
@@ -81,11 +114,11 @@ defmodule IEx.Server do
 
       # TODO: debug events
       { :debug, { :match, pid, expr, patterns }} ->
-        IO.puts :stderr, "#{inspect pid}: match #{Macro.to_string expr}"
+        IO.puts :stderr, ">> :match #{inspect patterns}\n#{inspect pid}: #{Macro.to_string expr}"
         do_loop(config)
 
       { :debug, { event, pid, expr }} ->
-        IO.puts :stderr, "#{inspect pid}: #{Macro.to_string expr}"
+        IO.puts :stderr, ">> #{inspect event}\n#{inspect pid}: #{Macro.to_string expr}"
         do_loop(config)
 
       # exit from input or eval

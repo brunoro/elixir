@@ -9,10 +9,13 @@ defmodule IEx.Debugger do
 
   # for testing purposes
   defmacro defdebug(header, do: body) do
-    wrapped_body = IEx.Debugger.wrap_quoted(body)
+    wrapped_body = Runner.wrap_next_call(body)
     quote do
       def unquote(header) do
-        unquote(wrapped_body)
+        IEx.Debugger.PIDTable.start_link
+        IEx.Debugger.Controller.start_link(client: nil)
+        result = unquote(wrapped_body)
+        result
       end
     end
   end
@@ -43,9 +46,6 @@ defmodule IEx.Debugger do
       expr -> expr
     end
     { :defmodule, meta, wrap_do }
-  end
-  def wrap_quoted({ :fn, meta, clauses }) do
-    { :fn, meta, Enum.map(clauses, Runner.wrap_next_call(&1)) }
   end
   def wrap_quoted({ :def, meta, right }) do
     [header, [do: body]] = right
