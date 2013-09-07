@@ -2,13 +2,10 @@ defmodule IEx.Debugger do
   use Application.Behaviour
   alias IEx.Debugger.Runner
 
-  def start(opts) do
-    IEx.Debugger.Supervisor.start_link(opts)
-  end
+  def start(opts),        do: IEx.Debugger.Supervisor.start_link(opts)
+  def start(_type, opts), do: IEx.Debugger.Supervisor.start_link(opts)
 
-  def stop do
-    IEx.Debugger.Supervisor.stop
-  end
+  def stop, do: IEx.Debugger.Supervisor.stop
 
   # for testing purposes
   defmacro defdebug(header, do: body) do
