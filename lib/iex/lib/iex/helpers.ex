@@ -15,6 +15,8 @@ defmodule IEx.Helpers do
   * `cd/1`      — changes the current directory
   * `clear/0`   — clears the screen
   * `dc/2`      — compiles a file at the given path with debugging calls
+  * `dpg/0`   — gets patterns to be traced by debugger
+  * `dps/1`   — sets patterns to be traced by debugger
   * `flush/0`   — flushes all messages sent to the shell
   * `h/0`       — prints this help message
   * `h/1`       — prints help for the given module, function or macro
@@ -100,6 +102,20 @@ defmodule IEx.Helpers do
       [modules, _binaries] = List.unzip(modlist)
       modules
     end) |> List.flatten
+  end
+
+  @doc """
+  Gets patterns being traced by the debugger.
+  """
+  def dpg do
+    IEx.Debugger.Controller.patterns
+  end
+
+  @doc """
+  Sets patterns being traced by the debugger.
+  """
+  def dps(pat) do
+    IEx.Debugger.Controller.patterns(pat)
   end
 
   @doc """

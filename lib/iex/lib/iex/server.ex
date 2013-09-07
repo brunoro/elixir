@@ -82,7 +82,6 @@ defmodule IEx.Server do
       # TODO: debug events
       { :debug, { :match, pid, expr, patterns }} ->
         IO.puts :stderr, "#{inspect pid}: match #{Macro.to_string expr}"
-        IO.inspect patterns
         do_loop(config)
 
       { :debug, { event, pid, expr }} ->

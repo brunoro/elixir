@@ -5,7 +5,7 @@ defmodule IEx.Debugger.Controller do
 
   @server_name { :global, :controller }
 
-  defrecord State, [client: nil, processes: nil, patterns: [%r/def/]]
+  defrecord State, [client: nil, processes: nil, patterns: []]
 
   def alive? do
     { _reg, name } = @server_name
@@ -28,6 +28,14 @@ defmodule IEx.Debugger.Controller do
   def handle_call(:list, _sender, state) do
     { :reply, state.processes, state }
   end
+  
+  def handle_call(:patterns, _sender, state) do
+    { :reply, state.patterns, state }
+  end
+  
+  def handle_call({ :patterns, patterns }, _sender, state) do
+    { :reply, patterns, state.patterns(patterns) }
+  end
 
   # The Controller keeps track of the processes 
   # currently running, being notified through next.
@@ -35,8 +43,8 @@ defmodule IEx.Debugger.Controller do
     if state.client do
       #state.client <- { :debug, { :next, pid, expr }}
       expr_str = Macro.to_string expr
-      matching = Enum.take_while state.patterns, fn(pattern) ->
-        not Regex.match? pattern, expr_str
+      matching = Enum.filter state.patterns, fn(pattern) ->
+        Regex.match? pattern, expr_str
       end
       unless Enum.empty? matching do
         state.client <- { :debug, { :match, pid, expr, matching }}
@@ -46,6 +54,9 @@ defmodule IEx.Debugger.Controller do
     { :noreply, state.processes(Dict.put(state.processes, pid, expr)) }
   end
 
+  # interface methods
+  def patterns,        do: :gen_server.call(@server_name, :patterns)
+  def patterns(pat),   do: :gen_server.call(@server_name, { :patterns, pat })
   def list,            do: :gen_server.call(@server_name, :list)
   def step(pid),       do: Runner.continue(pid)
   def next(pid, expr), do: :gen_server.cast(@server_name, { :next, pid, expr })
