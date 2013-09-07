@@ -5,7 +5,7 @@ defmodule IEx.Debugger.Controller do
 
   @server_name { :global, :controller }
 
-  defrecord State, [client: nil, processes: nil, patterns: []]
+  defrecord State, [client: nil, processes: nil, patterns: [%r/def/]]
 
   def alive? do
     { _reg, name } = @server_name
@@ -33,7 +33,14 @@ defmodule IEx.Debugger.Controller do
   # currently running, being notified through next.
   def handle_cast({ :next, pid, expr }, state) do
     if state.client do
-      state.client <- { :debug, { :next, pid, expr }}
+      #state.client <- { :debug, { :next, pid, expr }}
+      expr_str = Macro.to_string expr
+      matching = Enum.take_while state.patterns, fn(pattern) ->
+        not Regex.match? pattern, expr_str
+      end
+      unless Enum.empty? matching do
+        state.client <- { :debug, { :match, pid, expr, matching }}
+      end
     end
     step(pid)
     { :noreply, state.processes(Dict.put(state.processes, pid, expr)) }

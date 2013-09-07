@@ -80,6 +80,11 @@ defmodule IEx.Server do
         do_loop(config.cache(''))
 
       # TODO: debug events
+      { :debug, { :match, pid, expr, patterns }} ->
+        IO.puts :stderr, "#{inspect pid}: match #{Macro.to_string expr}"
+        IO.inspect patterns
+        do_loop(config)
+
       { :debug, { event, pid, expr }} ->
         IO.puts :stderr, "#{inspect pid}: #{Macro.to_string expr}"
         do_loop(config)
