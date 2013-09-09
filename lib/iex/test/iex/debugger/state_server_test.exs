@@ -1,6 +1,6 @@
 Code.require_file "test_helper.exs", __DIR__
 
-defmodule StateServerTest do
+defmodule IEx.Debugger.StateServerTest do
   use ExUnit.Case
   alias IEx.Debugger.StateServer
 
