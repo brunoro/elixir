@@ -1,6 +1,6 @@
 Code.require_file "test_helper.exs", __DIR__
 
-defmodule EscapeTest do
+defmodule IEx.Debugger.EscapeTest do
   use ExUnit.Case
   import IEx.Debugger.Escape
 

@@ -1,6 +1,6 @@
 Code.require_file "test_helper.exs", __DIR__
 
-defmodule CaseTest do
+defmodule IEx.Debugger.CaseTest do
   use ExUnit.Case
   import IEx.Debugger
 
@@ -105,9 +105,9 @@ defmodule CaseTest do
     assert nil == multi_assigned_case_f4
   end
 
-  defmodule VarsTestCase do
-    defdebug foo, do: 1
-    defdebug bar(x) do
+  defdebugmodule VarsTestCase do
+    def foo, do: 1
+    def bar(x) do
       foo = 1
       case x do
         true -> foo = 2
@@ -120,6 +120,5 @@ defmodule CaseTest do
   test "binding variables on case" do
     assert 1 == VarsTestCase.bar(false)
     assert 2 == VarsTestCase.bar(true)
-    #test_helper:run_and_remove(F, ['Elixir.Bar']).
   end
 end

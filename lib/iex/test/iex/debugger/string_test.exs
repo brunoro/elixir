@@ -1,6 +1,6 @@
 Code.require_file "test_helper.exs", __DIR__
 
-defmodule StringTest do
+defmodule IEx.Debugger.StringTest do
   use ExUnit.Case
   import IEx.Debugger
 

@@ -1,6 +1,6 @@
 Code.require_file "../test_helper.exs", __DIR__
 
-defmodule IEx.HelpersTest do
+defmodule IEx.Debugger.HelpersTest do
   use IEx.Case
 
   import IEx.Helpers
@@ -25,5 +25,4 @@ defmodule IEx.HelpersTest do
     assert dps([pattern]) == [pattern]
     assert dpg == [pattern]
   end
-
 end
