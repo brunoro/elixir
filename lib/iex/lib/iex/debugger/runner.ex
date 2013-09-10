@@ -281,11 +281,14 @@ defmodule IEx.Debugger.Runner do
       case PIDTable.get(self) do
         nil ->
           binding = Kernel.binding
-          scope = :elixir_scope.to_erl_env(__ENV__)
+          scope   = :elixir.scope_for_eval(
+            file: __FILE__,
+            delegate_locals_to: __MODULE__
+          )
         state_server ->
-          state = StateServer.get(state_server)
+          state   =  StateServer.get(state_server)
           binding = Keyword.merge(state.binding, Kernel.binding)
-          scope = :elixir_scope.vars_from_binding(state.scope, binding)
+          scope   = :elixir_scope.vars_from_binding(state.scope, binding)
       end
       
       PIDTable.start(self, binding, scope)
