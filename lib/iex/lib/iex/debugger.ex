@@ -52,7 +52,8 @@ defmodule IEx.Debugger do
           do_block ->
             Keyword.put(list, :do, wrap_quoted(do_block))
         end
-      expr -> expr
+      expr -> 
+        wrap_quoted(expr)
     end
     { :defmodule, meta, wrap_do }
   end
