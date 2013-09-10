@@ -1,12 +1,46 @@
 defmodule IEx.Debugger.Evaluator do
   import IEx.Debugger.Escape
 
+  # Scope -- Erlang record: 
+  # 0   :elixir_scope,
+  # 1   context=nil,             %% can be assign, guards or nil
+  # 2   extra=nil,               %% extra information about the context, like fn_match for fns
+  # 3   noname=false,            %% when true, don't add new names (used by try)
+  # 4   super=false,             %% when true, it means super was invoked
+  # 5   caller=false,            %% when true, it means caller was invoked
+  # 6   module=nil,              %% the current module
+  # 7   function=nil,            %% the current function
+  # 8   vars=[],                 %% a dict of defined variables and their alias
+  # 9   list_vars=nil,           %% a list of vars passed down to Macro.Env
+  # 10  backup_vars=nil,         %% a copy of vars to be used on ^var
+  # 11  temp_vars=nil,           %% a set of all variables defined in a particular assign
+  # 12  clause_vars=nil,         %% a dict of all variables defined in a particular clause
+  # 13  extra_guards=nil,        %% extra guards from args expansion
+  # 14  counter=[],              %% a counter for the variables defined
+  # 15  local=nil,               %% the scope to evaluate local functions against
+  # 16  context_modules=[],      %% modules defined in the current context
+  # 17  macro_aliases=[],        %% keep aliases defined inside a macro
+  # 18  aliases,                 %% an orddict with aliases by new -> old names
+  # 19  file,                    %% the current scope filename
+  # 20  requires,                %% a set with modules required
+  # 21  macro_macros=[],         %% a list with macros imported from module inside a macro
+  # 22  macros,                  %% a list with macros imported from module
+  # 23  macro_functions=[],      %% a list with functions imported from module inside a macro
+  # 24  functions                %% a list with functions imported from module
   # how to evaluate expressions 
   # TODO: use scope on eval?
   def eval_quoted(expr, state) do
     try do
-      { value, binding, scope } = :elixir.eval_quoted([expr], state.binding)
-      new_scope = :elixir_scope.vars_from_binding(scope, binding)
+      local = elem(state.scope, 15)
+      file  = elem(state.scope, 19)
+
+      { _, meta, _ } = expr
+      line = meta[:line] || 0
+
+      { value, binding, scope } = :elixir.eval_quoted([expr], state.binding, line, state.scope)
+      new_scope = scope 
+                  |> set_elem(15, local)
+                  |> set_elem(19, file)
 
       { :ok, value, state.binding(binding).scope(new_scope) }
     catch
