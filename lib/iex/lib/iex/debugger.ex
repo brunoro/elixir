@@ -14,8 +14,7 @@ defmodule IEx.Debugger do
       def unquote(header) do
         IEx.Debugger.PIDTable.start_link
         IEx.Debugger.Controller.start_link(client: nil)
-        result = unquote(wrapped_body)
-        result
+        unquote(wrapped_body)
       end
     end
   end

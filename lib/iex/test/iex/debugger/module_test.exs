@@ -4,6 +4,16 @@ defmodule IEx.Debugger.ModuleTest do
   use ExUnit.Case
   import IEx.Debugger
 
+  # test from kernel, if it compiles we're good
+  defrecord State, a: nil
+
+  defmodule B do
+    defrecord State, b: nil
+    def get(State[b: b]), do: b
+  end
+
+  def get(State[a: a]), do: a
+
   defdebugmodule Nested do
     defmodule A do
       def foo(x) do
