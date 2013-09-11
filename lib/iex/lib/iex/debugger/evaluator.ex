@@ -1,7 +1,7 @@
 defmodule IEx.Debugger.Evaluator do
   import IEx.Debugger.Escape
 
-  # Scope -- Erlang record: 
+  # Elixir scope -- Erlang record: 
   # 0   :elixir_scope,
   # 1   context=nil,             %% can be assign, guards or nil
   # 2   extra=nil,               %% extra information about the context, like fn_match for fns
@@ -27,19 +27,18 @@ defmodule IEx.Debugger.Evaluator do
   # 22  macros,                  %% a list with macros imported from module
   # 23  macro_functions=[],      %% a list with functions imported from module inside a macro
   # 24  functions                %% a list with functions imported from module
-  # how to evaluate expressions 
-  # TODO: use scope on eval?
   def eval_quoted(expr, state) do
     try do
-      local = elem(state.scope, 15)
-      file  = elem(state.scope, 19)
+      module = elem(state.scope, 15) # module from delegate_locals_to
+      file   = elem(state.scope, 19)
 
       { _, meta, _ } = expr
       line = meta[:line] || 0
 
-      { value, binding, scope } = :elixir.eval_quoted([expr], state.binding, line, state.scope)
+      mod_scope = set_elem(state.scope, 6, module) # set module from local
+      { value, binding, scope } = :elixir.eval_quoted([expr], state.binding, line, mod_scope)
       new_scope = scope 
-                  |> set_elem(15, local)
+                  |> set_elem(15, module) # local
                   |> set_elem(19, file)
 
       { :ok, value, state.binding(binding).scope(new_scope) }

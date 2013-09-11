@@ -130,8 +130,13 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
+  # special forms
+  # TODO: lookup form on scope first
+  #Enum.map [:__ENV__, :__MODULE__, :__FILE__, :__DIR__], fn(form) ->
+  #  def do_next({ unquote(form), meta, nil }), do: { unquote(form), meta, nil }
+  #end
+  
   # anonymous functions
-  # TODO: manage context changing 
   def do_next({ :fn, meta, [[do: body]] }) do
     next_body = wrap_next_call(body)
     { :ok, { :fn, meta, [[do: next_body]] }}
