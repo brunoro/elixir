@@ -1,7 +1,7 @@
 Code.require_file "test_helper.exs", __DIR__
 
 defmodule IEx.Debugger.FunctionTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   import IEx.Debugger
 
   defdebug sum_list(x) do

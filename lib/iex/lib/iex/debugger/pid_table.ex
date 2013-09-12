@@ -9,9 +9,15 @@ defmodule IEx.Debugger.PIDTable do
     :global.whereis_name(name) != :undefined
   end
 
-  def start_link do
-    if alive?, do: :gen_server.call(@server_name, :stop)
-    :gen_server.start_link(@server_name, __MODULE__, [], [])
+  def start_link(opts // []) do
+    { status, value } = :gen_server.start_link(@server_name, __MODULE__, opts, [])
+    case status do
+      :ok -> 
+        pid = value
+      :error -> 
+        { :already_started, pid } = value
+    end
+    { :ok, pid }
   end
 
   def init(_opts) do

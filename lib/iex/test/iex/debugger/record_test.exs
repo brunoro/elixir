@@ -56,7 +56,26 @@ defdebugmodule RecordTest.Macros do
 end
 
 defmodule IEx.Debugger.RecordTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
+
+  defrecord X, [a: 1, b: 2]
+
+  defdebug ex_erl_env do
+    ex_env  = __ENV__
+    erl_env = :elixir_scope.to_erl_env(ex_env)
+    { ex_env, erl_env }
+  end
+
+  test "passing records around" do
+    { ex, erl } = ex_erl_env
+    assert ex.module == elem(erl, 6)
+  end
+
+  test "bracket syntax for creating records" do
+    a = X[]
+    assert a.a == 1
+  end
+
 
   # Check the access from the generated macro works
   # as expected. If it compiles, we are good to go.

@@ -3,6 +3,12 @@ defmodule IEx.Debugger.Escape do
   @pid_prefix "__PID_"
   @fun_prefix "__FUN_"
 
+  defmacro is_escapable(thing) do
+    quote do
+      is_pid(unquote(thing)) or is_function(unquote(thing))
+    end
+  end
+
   def is_escaped?(bin) do
     String.starts_with?(bin, @pid_prefix) or
     String.starts_with?(bin, @fun_prefix)

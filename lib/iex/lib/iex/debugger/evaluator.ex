@@ -49,7 +49,7 @@ defmodule IEx.Debugger.Evaluator do
   end
 
   # add functions and pids to binding with some name mangling
-  def escape_and_bind(thing, state) when is_pid(thing) or is_function(thing) do 
+  def escape_and_bind(thing, state) when is_escapable(thing) do 
     var = thing |> escape |> binary_to_atom
     new_binding = Keyword.put(state.binding, var, thing)
     new_scope = :elixir_scope.vars_from_binding(state.scope, new_binding)

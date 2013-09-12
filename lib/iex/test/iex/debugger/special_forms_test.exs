@@ -1,7 +1,7 @@
 Code.require_file "test_helper.exs", __DIR__
 
 defmodule IEx.Debugger.SpecialFormsTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   import IEx.Debugger
   
   #@special_forms [:__ENV__, :__MODULE__, :__FILE__, :__DIR__]
