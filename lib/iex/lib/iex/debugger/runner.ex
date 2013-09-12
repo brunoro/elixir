@@ -128,6 +128,7 @@ defmodule IEx.Debugger.Runner do
     receive do
       :continue -> do_next(expr)
     end
+    #do_next(expr)
   end
 
   # special forms

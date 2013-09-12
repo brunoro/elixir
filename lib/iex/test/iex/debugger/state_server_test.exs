@@ -1,7 +1,7 @@
 Code.require_file "test_helper.exs", __DIR__
 
 defmodule IEx.Debugger.StateServerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   alias IEx.Debugger.StateServer
 
   test "put/get state" do
