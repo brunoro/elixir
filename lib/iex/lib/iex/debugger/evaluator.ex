@@ -28,15 +28,25 @@ defmodule IEx.Debugger.Evaluator do
   # 23  macro_functions=[],      %% a list with functions imported from module inside a macro
   # 24  functions                %% a list with functions imported from module
   def eval_quoted(expr, state) do
+    module    = elem(state.scope, 15) # module from delegate_locals_to
+    file      = elem(state.scope, 19)
+    mod_scope = set_elem(state.scope, 6, module) # set module from local
+
+    { _, meta, _ } = expr
+    line = meta[:line] || 0
+
     try do
-      module = elem(state.scope, 15) # module from delegate_locals_to
-      file   = elem(state.scope, 19)
+      # expand it: we just want to eval code
+      ex_scope = :elixir_scope.to_ex_env({ line, mod_scope })
+      exp = Macro.expand_all(expr, ex_scope)
 
-      { _, meta, _ } = expr
-      line = meta[:line] || 0
+      case Macro.safe_term(exp) do
+        :ok ->
+          { value, binding, scope } = { exp, state.binding, state.scope }
+        { :unsafe, _ } ->
+          { value, binding, scope } = :elixir.eval_quoted([expr], state.binding, line, mod_scope)
 
-      mod_scope = set_elem(state.scope, 6, module) # set module from local
-      { value, binding, scope } = :elixir.eval_quoted([expr], state.binding, line, mod_scope)
+      end
       new_scope = scope 
                   |> set_elem(15, module) # local
                   |> set_elem(19, file)
