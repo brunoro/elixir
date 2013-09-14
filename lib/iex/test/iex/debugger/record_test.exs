@@ -1,11 +1,11 @@
 Code.require_file "test_helper.exs", __DIR__
 import IEx.Debugger
 
-defrecord RecordTest.SomeRecord, a: 0, b: 1
-defrecord RecordTest.WithNoField, []
+defrecord IEx.Debugger.RecordTest.SomeRecord, a: 0, b: 1
+defrecord IEx.Debugger.RecordTest.WithNoField, []
 
 ## Dynamic names and overridable
-name = RecordTest.DynamicName
+name = IEx.Debugger.RecordTest.DynamicName
 defrecord name, a: 0, b: 1 do
   defoverridable [update_b: 2]
 
@@ -16,28 +16,28 @@ defrecord name, a: 0, b: 1 do
   Record.import __MODULE__, as: :self
 end
 
-defdebugmodule RecordTest.DynamicOpts do
+defdebugmodule IEx.Debugger.RecordTest.DynamicOpts do
   @a [foo: 1..30]
   defrecord State, (lc {name, _interval} inlist @a, do: {name, nil})
 end
 
 ## With types
 
-defrecord RecordTest.WithTypeOverriden, a: 0, b: 1 do
+defrecord IEx.Debugger.RecordTest.WithTypeOverriden, a: 0, b: 1 do
   @type t :: __MODULE__[a: integer, b: any]
 end
 
-defrecord RecordTest.WithRecordType, a: 0, b: 1 do
+defrecord IEx.Debugger.RecordTest.WithRecordType, a: 0, b: 1 do
   record_type a: non_pos_integer
   record_type a: integer
 end
 
-defdebugmodule RecordTest.Macros do
+defdebugmodule IEx.Debugger.RecordTest.Macros do
   defmacro gen do
     quote do
-      alias RecordTest.Macros.Nested
+      alias IEx.Debugger.RecordTest.Macros.Nested
 
-      def this_works, do: RecordTest.Macros.Nested[]
+      def this_works, do: IEx.Debugger.RecordTest.Macros.Nested[]
       def this_should_too, do: Nested[]
     end
   end
@@ -79,11 +79,11 @@ defmodule IEx.Debugger.RecordTest do
 
   # Check the access from the generated macro works
   # as expected. If it compiles, we are good to go.
-  require RecordTest.Macros
-  RecordTest.Macros.gen
+  require IEx.Debugger.RecordTest.Macros
+  IEx.Debugger.RecordTest.Macros.gen
 
   defdebug dynamic_name_new(args // []) do
-    RecordTest.DynamicName.new(args)
+    IEx.Debugger.RecordTest.DynamicName.new(args)
   end
 
   test :dynamic_record_name do
@@ -98,7 +98,7 @@ defmodule IEx.Debugger.RecordTest do
   end
 
   test :is_record do
-    assert is_record(RecordTest.WithNoField.new)
+    assert is_record(IEx.Debugger.RecordTest.WithNoField.new)
     refute is_record(empty_tuple)
     refute is_record(a_list)
   end
@@ -118,18 +118,18 @@ defmodule IEx.Debugger.RecordTest do
   end
 
   test :record_update do
-    record = RecordTest.SomeRecord.new
-    assert RecordTest.SomeRecord.a(record.update(a: 2, b: 3)) == 2
-    assert RecordTest.SomeRecord.b(record.update(a: 2, b: 3)) == 3
-    assert RecordTest.SomeRecord.a(record.update(a: 2)) == 2
-    assert RecordTest.SomeRecord.b(record.update(b: 2)) == 2
+    record = IEx.Debugger.RecordTest.SomeRecord.new
+    assert IEx.Debugger.RecordTest.SomeRecord.a(record.update(a: 2, b: 3)) == 2
+    assert IEx.Debugger.RecordTest.SomeRecord.b(record.update(a: 2, b: 3)) == 3
+    assert IEx.Debugger.RecordTest.SomeRecord.a(record.update(a: 2)) == 2
+    assert IEx.Debugger.RecordTest.SomeRecord.b(record.update(b: 2)) == 2
   end
 
   test :optimizable do
-    assert { :b, 1 } in RecordTest.SomeRecord.__record__(:optimizable)
-    assert { :b, 2 } in RecordTest.SomeRecord.__record__(:optimizable)
-    assert { :update_b, 2 } in RecordTest.SomeRecord.__record__(:optimizable)
-    refute { :update_b, 2 } in RecordTest.DynamicName.__record__(:optimizable)
+    assert { :b, 1 } in IEx.Debugger.RecordTest.SomeRecord.__record__(:optimizable)
+    assert { :b, 2 } in IEx.Debugger.RecordTest.SomeRecord.__record__(:optimizable)
+    assert { :update_b, 2 } in IEx.Debugger.RecordTest.SomeRecord.__record__(:optimizable)
+    refute { :update_b, 2 } in IEx.Debugger.RecordTest.DynamicName.__record__(:optimizable)
   end
 
   test :result do

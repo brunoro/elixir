@@ -128,10 +128,9 @@ defmodule IEx.Debugger.Runner do
     receive do
       :continue -> do_next(expr)
     end
-    #do_next(expr)
   end
 
-  # special forms
+  # special forms?
   # TODO: lookup form on scope first
   #Enum.map [:__ENV__, :__MODULE__, :__FILE__, :__DIR__], fn(form) ->
   #  def do_next({ unquote(form), meta, nil }), do: { unquote(form), meta, nil }
@@ -303,6 +302,7 @@ defmodule IEx.Debugger.Runner do
 
       case return do
           { :ok, value } ->
+            # unescape here
             value
           { :exception, kind, reason, stacktrace } ->
             :erlang.raise(kind, reason, stacktrace)
