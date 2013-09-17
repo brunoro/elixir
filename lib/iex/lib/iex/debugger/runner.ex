@@ -54,21 +54,21 @@ defmodule IEx.Debugger.Runner do
   defp kernel_macros do
     state_server = PIDTable.get(self)
     state = StateServer.get(state_server)
-    elem(state.scope, 22) # check Debugger.Evaluator for elixir_scope indexes
+    elem(state.scope, 22)[Kernel] # check Debugger.Evaluator for elixir_scope indexes
   end
 
   # expand expr and run fun/0 
   defp do_or_expand(expr, fun) do 
-    # TODO: check if it's a Kernel macro
+    { name, _, args } = expr 
+    arity = if args, do: Enum.count(args), else: 0
+        
     { :ok, expanded } = with_state &Evaluator.expand(expr, &1)
 
-    { expr_type, _, _ } = expr 
     cond do
-      # TODO: use arity
       # kernel macro, next on it
-      expr_type in kernel_macros ->
+      { name, arity } in kernel_macros ->
         do_next(expanded)
-      # user macro, just eval it
+      # other macro, just eval it
       expanded != expr ->
         eval_change_state(expr)
       # otherwise keep moving
@@ -289,6 +289,9 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
+  # wrap_next_call/1 prepares an expression to call next/1
+  # inside an :elixir.eval call. This is  used on case clauses and
+  # anonymous functions
   def wrap_next_call({ :->, meta, clauses }) do
     wrap_clauses = Enum.map clauses, fn({ left, clause_meta, right }) ->
       { left, clause_meta, wrap_next_call(right) }
