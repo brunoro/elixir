@@ -45,7 +45,6 @@ defmodule IEx.Debugger.Evaluator do
           { value, binding, scope } = { exp, state.binding, state.scope }
         { :unsafe, _ } ->
           { value, binding, scope } = :elixir.eval_quoted([expr], state.binding, line, mod_scope)
-
       end
       new_scope = scope 
                   |> set_elem(15, module) # local
