@@ -51,14 +51,28 @@ defmodule IEx.Debugger.Runner do
     result
   end
 
-  # expansions that lead to case-like expressions should be kept
+  defp kernel_macros do
+    state_server = PIDTable.get(self)
+    state = StateServer.get(state_server)
+    elem(state.scope, 22) # check Debugger.Evaluator for elixir_scope indexes
+  end
+
+  # expand expr and run fun/0 
   defp do_or_expand(expr, fun) do 
+    # TODO: check if it's a Kernel macro
     { :ok, expanded } = with_state &Evaluator.expand(expr, &1)
 
-    case expanded do
-      { :case, _, _ } ->
+    { expr_type, _, _ } = expr 
+    cond do
+      # TODO: use arity
+      # kernel macro, next on it
+      expr_type in kernel_macros ->
         do_next(expanded)
-      _result ->
+      # user macro, just eval it
+      expanded != expr ->
+        eval_change_state(expr)
+      # otherwise keep moving
+      true ->
         fun.()
     end
   end
@@ -88,7 +102,7 @@ defmodule IEx.Debugger.Runner do
   # maps next/1 while status returned is :ok, otherwise returns the
   # failing element of the list with its status
   def map_next_while_ok(expr_list) do
-    v = filter_map_while expr_list, &is_status_ok?(&1), &strip_status(&1), &next(&1)
+    v = filter_map_while(expr_list, &is_status_ok?(&1), &strip_status(&1), &next(&1))
     case v do
       value_list when is_list(value_list) ->
         { :ok, value_list }
@@ -119,6 +133,10 @@ defmodule IEx.Debugger.Runner do
 
   def continue(runner_pid), do: runner_pid <- :continue
 
+  # prepare values for injecting into quoted source
+  defp prepare_value({ :fn, meta, clauses }), do: { :fn, meta, clauses }
+  defp prepare_value(other),                  do: Macro.escape(other)
+
   ## next/1
   # makes nested next calls until leafs are reached.
   # keeps the current scope and binding
@@ -145,13 +163,13 @@ defmodule IEx.Debugger.Runner do
   # case
   def do_next({ :case, _, [condition | [[do: clauses]]] }) do
     { :ok, condition_value } = next(condition)
-    match_next(condition_value, clauses) # is there more than do?
+    match_next(prepare_value(condition_value), clauses) # is there more than do?
   end
 
   # receive
   def do_next({ :receive, _, [[do: clauses]] }) do
     { :receive, received_value } = with_state &Evaluator.do_receive(&1)
-    match_next(received_value, clauses) 
+    match_next(prepare_value(received_value), clauses) 
   end
 
   # receive-after
@@ -160,7 +178,7 @@ defmodule IEx.Debugger.Runner do
 
     case with_state &Evaluator.do_receive(&1, after_time) do
       { :receive, received_value } ->
-        match_next(received_value, do_clauses) 
+        match_next(prepare_value(received_value), do_clauses) 
       { :after, _ } ->
         next(after_expr) 
     end
@@ -189,17 +207,17 @@ defmodule IEx.Debugger.Runner do
   # assignments
   def do_next({ :=, meta, [left | [right]] }) do
     if_status :ok, next(right), fn(right_value) ->
-      eval_change_state({ :=, meta, [left | [right_value]] })
+      eval_change_state({ :=, meta, [left | [prepare_value(right_value)]] })
     end
   end
 
   # list of expressions
   def do_next({ type, meta, expr_list }) when is_list(expr_list) do
     expr = { type, meta, expr_list }
-
     do_or_expand expr, fn ->
       if_status :ok, map_next_while_ok(expr_list), fn(value_list) ->
-        eval_change_state({ type, meta, value_list })
+        nice_value_list = Enum.map(value_list, &prepare_value/1)
+        eval_change_state({ type, meta, nice_value_list })
       end
     end
   end
@@ -214,14 +232,14 @@ defmodule IEx.Debugger.Runner do
 
   # lists aren't escaped like tuples
   def do_next(expr_list) when is_list(expr_list) do
-    map_next_while_ok expr_list
+    map_next_while_ok(expr_list)
   end
   
   # other tuples?
   def do_next(expr_tuple) when is_tuple(expr_tuple) do
     expr_list = tuple_to_list(expr_tuple)
     # TODO: also check for exceptions here
-    { status, result } = map_next_while_ok expr_list
+    { status, result } = map_next_while_ok(expr_list)
     { status, list_to_tuple(result) }
   end
 
@@ -232,7 +250,7 @@ defmodule IEx.Debugger.Runner do
   # the first clause matching the condition is found
   def match_next(value, clauses) do
     matching_clause = change_state fn(state) ->
-      Evaluator.find_match_clause(value, clauses, state)
+      Evaluator.find_match_clause(prepare_value(value), clauses, state)
     end
     
     if_status :ok, matching_clause, fn({ _, _, right }) ->
@@ -264,9 +282,7 @@ defmodule IEx.Debugger.Runner do
 
     if try_expr do
       do_and_discard_state fn ->
-        with_state fn(state) ->
-          Evaluator.escape_and_eval(try_expr, state)
-        end
+        eval_with_state(try_expr)
       end
     else
       exception
