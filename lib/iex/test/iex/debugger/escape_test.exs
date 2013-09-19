@@ -10,6 +10,18 @@ defmodule IEx.Debugger.EscapeTest do
     assert true == is_escaped? esc
   end
   
+  test "escape references" do
+    ref = make_ref
+    esc = escape(ref)
+    assert true == is_escaped? esc
+  end
+  
+  test "escape ports" do
+    port = self
+    esc = escape(port)
+    assert true == is_escaped? esc
+  end
+
   test "escape functions" do
     fun = fn(x) -> x end
     esc = escape(fun)
