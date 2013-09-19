@@ -26,7 +26,6 @@ defmodule IEx.Debugger.ModuleTest do
         x * x
       end
     end
-
     def foobar(x) do
       A.foo(x) + 1
     end

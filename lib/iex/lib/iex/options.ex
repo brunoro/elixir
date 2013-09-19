@@ -121,7 +121,7 @@ defmodule IEx.Options do
 
   The value is a keyword list. List of supported keys:
 
-    * `:enabled`      - boolean value that allows for switching the coloring on and off
+    * `:enabled`      - boolean value that allows for switching the coloring on and off\
     * `:eval_result`  - color for an expression's resulting value
     * `:eval_error`   - color for error messages
     * `:eval_info`    - color for various informational messages
