@@ -156,7 +156,7 @@ defmodule IEx.Debugger.Runner do
   
   # anonymous functions
   def do_next({ :fn, meta, [[do: body]] }) do
-    next_body = wrap_next_call(body)
+    next_body = wrap_next_arrow(body)
     { :ok, { :fn, meta, [[do: next_body]] }}
   end
 
@@ -274,9 +274,9 @@ defmodule IEx.Debugger.Runner do
     end]
 
     if rescue_block, do: clauses = 
-      Keyword.put clauses, :rescue, wrap_next_call(rescue_block)
+      Keyword.put clauses, :rescue, wrap_next_arrow(rescue_block)
     if catch_block, do: clauses = 
-      Keyword.put clauses, :catch, wrap_next_call(catch_block)
+      Keyword.put clauses, :catch, wrap_next_arrow(catch_block)
 
     try_expr = { :try, [context: IEx.Debugger.Evaluator, import: Kernel], [clauses] }
 
@@ -289,28 +289,28 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
-  # wrap_next_call/1 prepares an expression to call next/1
-  # inside an :elixir.eval call. This is  used on case clauses and
-  # anonymous functions
-  def wrap_next_call({ :->, meta, clauses }) do
+  def wrap_next_arrow({ :->, meta, clauses }) do
     wrap_clauses = Enum.map clauses, fn({ left, clause_meta, right }) ->
-      { left, clause_meta, wrap_next_call(right) }
+      { left, clause_meta, wrap_next_clause(right) }
     end
     { :->, meta, wrap_clauses }
   end
-  def wrap_next_call(expr) do
+
+  # wrap_next_clause/1 prepares an expression to call next/1
+  # inside an :elixir.eval call. This is used on case clauses and
+  # anonymous functions
+  def wrap_next_clause(expr) do
     esc_expr = Macro.escape expr
 
     quote do
       case PIDTable.get(self) do
         nil ->
+          # TODO: for some reason Kernel.binding don't contain function arguments
+          # but setting scope.vars to nil forces the the runtime to fetch them
           binding = Kernel.binding
-          scope   = :elixir.scope_for_eval(
-            file: __FILE__,
-            delegate_locals_to: __MODULE__
-          )
+          scope   = :elixir_scope.to_erl_env(__ENV__.vars(nil))
         state_server ->
-          state   =  StateServer.get(state_server)
+          state   = StateServer.get(state_server)
           binding = Keyword.merge(state.binding, Kernel.binding)
           scope   = :elixir_scope.vars_from_binding(state.scope, binding)
       end

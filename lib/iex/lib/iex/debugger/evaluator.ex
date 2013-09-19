@@ -28,9 +28,9 @@ defmodule IEx.Debugger.Evaluator do
   # 23  macro_functions=[],      %% a list with functions imported from module inside a macro
   # 24  functions                %% a list with functions imported from module
   def eval_quoted(expr, state) do
-    module    = elem(state.scope, 15) # module from delegate_locals_to
+    module    = elem(state.scope, 6)
     file      = elem(state.scope, 19)
-    mod_scope = set_elem(state.scope, 6, module) # set module from local
+    mod_scope = set_elem(state.scope, 15, module) # delegate_locals_to
 
     { _, meta, _ } = expr
     line = meta[:line] || 0

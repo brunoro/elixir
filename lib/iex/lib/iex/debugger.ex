@@ -9,7 +9,7 @@ defmodule IEx.Debugger do
 
   # for testing purposes
   defmacro defdebug(header, do: body) do
-    wrapped_body = Runner.wrap_next_call(body)
+    wrapped_body = Runner.wrap_next_clause(body)
     quote do
       def unquote(header) do
         IEx.Debugger.PIDTable.start_link
@@ -58,7 +58,7 @@ defmodule IEx.Debugger do
   end
   def wrap_quoted({ :def, meta, right }) do
     [header, [do: body]] = right
-    { :def, meta, [header, [do: Runner.wrap_next_call(body)]] }
+    { :def, meta, [header, [do: Runner.wrap_next_clause(body)]] }
   end
   def wrap_quoted({ left, meta, right }) when is_list(right) do
     { left, meta, Enum.map(right, &wrap_quoted/1) }
