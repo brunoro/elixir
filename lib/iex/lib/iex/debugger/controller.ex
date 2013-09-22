@@ -67,6 +67,13 @@ defmodule IEx.Debugger.Controller do
   def step(pid),       do: Runner.continue(pid)
   def next(pid, expr), do: :gen_server.cast(@server_name, { :next, pid, expr })
 
+  def authorize(expr) do
+    next(self, expr)
+    receive do
+      :continue -> :ok
+    end
+  end
+
   # those should be in UI
   def command(["list"], proc_list) do
     Enum.reduce proc_list, 0, fn({ pid, expr }, index) ->
