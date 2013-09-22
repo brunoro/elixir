@@ -137,43 +137,52 @@ defmodule IEx.Debugger.Runner do
   defp prepare_value({ :fn, meta, clauses }), do: { :fn, meta, clauses }
   defp prepare_value(other),                  do: Macro.escape(other)
 
+  # crawls on first quoted tree returning it with { :fn, _, _ } nodes
+  # replaced by those on the second tree
+  defp fn_from_second({ :fn, _, _ }, second), do: second
+  defp fn_from_second(l1, l2) when is_list(l1) and is_list(l2) do
+    Enum.map(Enum.zip(l1, l2), fn({ first, second }) ->
+      fn_from_second(first, second)
+    end)
+  end
+  defp fn_from_second({ left, meta, r1 }, { left, _, r2 }), do: { left, meta, fn_from_second(r1, r2) }
+  defp fn_from_second(first, _),                            do: first
+
   ## next/1
   # makes nested next calls until leafs are reached.
   # keeps the current scope and binding
   # returns { :ok, value } or { :exception, kind, reason, stacktrace }
   def next(expr) do
-    Controller.next(self, expr)
-    receive do
-      :continue -> do_next(expr)
-    end
+    do_next(expr)
   end
 
-  # special forms?
-  # TODO: lookup form on scope first
-  #Enum.map [:__ENV__, :__MODULE__, :__FILE__, :__DIR__], fn(form) ->
-  #  def do_next({ unquote(form), meta, nil }), do: { unquote(form), meta, nil }
-  #end
-  
   # anonymous functions
-  def do_next({ :fn, meta, [[do: body]] }) do
+  def do_next(expr={ :fn, meta, [[do: body]] }) do
+    Controller.authorize(expr)
     next_body = wrap_next_arrow(body)
     { :ok, { :fn, meta, [[do: next_body]] }}
   end
 
   # case
-  def do_next({ :case, _, [condition | [[do: clauses]]] }) do
+  def do_next(expr={ :case, meta, [condition | [[do: clauses]]] }) do
     { :ok, condition_value } = next(condition)
-    match_next(prepare_value(condition_value), clauses) # is there more than do?
+    condition_value = prepare_value(condition_value)
+
+    expr_condition_value = { :case, meta, [condition_value | [[do: clauses]]] }
+    Controller.authorize(fn_from_second(expr_condition_value, expr))
+    match_next(condition_value, clauses) # is there more than do?
   end
 
   # receive
-  def do_next({ :receive, _, [[do: clauses]] }) do
+  def do_next(expr={ :receive, _, [[do: clauses]] }) do
+    Controller.authorize(expr)
     { :receive, received_value } = with_state &Evaluator.do_receive(&1)
     match_next(prepare_value(received_value), clauses) 
   end
 
   # receive-after
-  def do_next({ :receive, _, [[do: do_clauses, after: after_clause]] }) do
+  def do_next(expr={ :receive, _, [[do: do_clauses, after: after_clause]] }) do
+    Controller.authorize(expr)
     {:->, _, [{ [after_time], _, after_expr }]} = after_clause
 
     case with_state &Evaluator.do_receive(&1, after_time) do
@@ -185,9 +194,9 @@ defmodule IEx.Debugger.Runner do
   end
 
   # try
-  def do_next({ :try, _, [clauses] }) do
+  def do_next(expr={ :try, _, [clauses] }) do
+    Controller.authorize(expr)
     do_clause = clauses[:do]
-
     # variables defined on try block aren't accessible outside it
     do_result = next(do_clause)
 
@@ -205,38 +214,44 @@ defmodule IEx.Debugger.Runner do
   end
 
   # assignments
-  def do_next({ :=, meta, [left | [right]] }) do
+  def do_next(expr={ :=, meta, [left | [right]] }) do
     if_status :ok, next(right), fn(right_value) ->
-      eval_change_state({ :=, meta, [left | [prepare_value(right_value)]] })
+      expr_value = { :=, meta, [left | [prepare_value(right_value)]] }
+      Controller.authorize(fn_from_second(expr_value, expr))
+      eval_change_state(expr_value)
     end
   end
 
   # list of expressions
-  def do_next({ type, meta, expr_list }) when is_list(expr_list) do
-    expr = { type, meta, expr_list }
+  def do_next(expr={ type, meta, expr_list }) when is_list(expr_list) do
     do_or_expand expr, fn ->
       if_status :ok, map_next_while_ok(expr_list), fn(value_list) ->
         nice_value_list = Enum.map(value_list, &prepare_value/1)
-        eval_change_state({ type, meta, nice_value_list })
+        expr_value = { type, meta, nice_value_list }
+        Controller.authorize(fn_from_second(expr_value, expr))
+        eval_change_state(expr_value)
       end
     end
   end
 
   # other expressions are evaluated directly
-  def do_next({ left, meta, right }) do
-    expr = { left , meta, right }
+  def do_next(expr={ left, meta, right }) do
     do_or_expand expr, fn ->
+      Controller.authorize(expr)
       eval_change_state(expr)
     end
   end
 
   # lists aren't escaped like tuples
   def do_next(expr_list) when is_list(expr_list) do
+    Controller.authorize(expr_list)
     map_next_while_ok(expr_list)
   end
   
   # other tuples?
   def do_next(expr_tuple) when is_tuple(expr_tuple) do
+    Controller.authorize(expr_tuple)
+
     expr_list = tuple_to_list(expr_tuple)
     # TODO: also check for exceptions here
     { status, result } = map_next_while_ok(expr_list)
