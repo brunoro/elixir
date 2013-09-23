@@ -38,7 +38,7 @@ defmodule IEx.Debugger.Evaluator do
     try do
       # expand it: we just want to eval code
       ex_scope = :elixir_scope.to_ex_env({ line, mod_scope })
-      exp = Macro.expand_all(expr, ex_scope)
+      exp = Macro.expand(expr, ex_scope)
 
       case Macro.safe_term(exp) do
         :ok ->

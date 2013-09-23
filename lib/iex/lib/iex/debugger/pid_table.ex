@@ -1,6 +1,8 @@
 defmodule IEx.Debugger.PIDTable do
   use GenServer.Behaviour
-  alias IEx.Debugger.StateServer
+
+  alias IEx.Debugger.Controller
+  alias IEx.Debugger.Companion
 
   @server_name { :global, :pid_table }
 
@@ -28,10 +30,14 @@ defmodule IEx.Debugger.PIDTable do
     { :stop, :normal, :shutdown_ok, dict }
   end
 
+  def handle_call(:get_all, _sender, dict) do
+    { :reply, dict, dict }
+  end
+
   def handle_call({ :get, pid }, _sender, dict) do
     case dict[pid] do
-      { state_server, _count } ->
-        { :reply, state_server, dict }
+      { companion, _count } ->
+        { :reply, companion, dict }
       nil ->
         { :reply, nil, dict }
     end
@@ -40,36 +46,41 @@ defmodule IEx.Debugger.PIDTable do
   # before function calls
   def handle_call({ :start, pid, binding, scope }, _sender, dict) do
     entry = case dict[pid] do
-      { state_server, count } ->
+      { companion, count } ->
         # create new context
-        StateServer.push_stack(state_server)
-        state = StateServer.get(state_server)
-        StateServer.put(state_server, state.binding(binding).scope(scope))
+        Companion.push_stack(companion)
+        state = Companion.get_state(companion)
+        Companion.put_state(companion, state.binding(binding).scope(scope))
 
-        { state_server, count + 1 }
+        { companion, count + 1 }
       nil ->
-        { :ok, state_server } = StateServer.start_link(binding, scope)
-        { state_server, 0 }
+        breakpoints = Controller.breakpoints
+        { :ok, companion } = Companion.start_link(binding, scope, breakpoints)
+        { companion, 0 }
     end
 
-    { :reply, state_server, Dict.put(dict, pid, entry) }
+    { :reply, companion, Dict.put(dict, pid, entry) }
   end
  
   # after function calls
   def handle_cast({ :finish, pid }, dict) do
     new_dict = case dict[pid] do
-      { state_server, 0 } -> 
-        StateServer.done(state_server)
+      { companion, 0 } ->
+        Companion.done(companion)
         Dict.delete(dict, pid)
-      { state_server, count } ->
+      { companion, count } ->
         # exit context
-        StateServer.pop_stack(state_server)
-        Dict.put(dict, pid, { state_server, count - 1 })
+        Companion.pop_stack(companion)
+        Dict.put(dict, pid, { companion, count - 1 })
     end
 
     { :noreply, new_dict }
   end
 
+  # controller interface
+  def get_all,                    do: :gen_server.call(@server_name, :get_all)
+
+  # client interface
   def get(pid),                   do: :gen_server.call(@server_name, { :get, pid })
   def start(pid, binding, scope), do: :gen_server.call(@server_name, { :start, pid, binding, scope })
   def finish(pid),                do: :gen_server.cast(@server_name, { :finish, pid })

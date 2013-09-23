@@ -10,7 +10,7 @@ defmodule IEx.Debugger.Supervisor do
     children = [
       # Define workers and child supervisors to be supervised
       worker(IEx.Debugger.PIDTable, []),
-      worker(IEx.Debugger.Controller, [opts[:client] || nil])
+      worker(IEx.Debugger.Controller, [])
     ]
 
     # See http://elixir-lang.org/docs/stable/Supervisor.Behaviour.html

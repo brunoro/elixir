@@ -2,10 +2,12 @@ defmodule IEx.Debugger.Controller do
   use GenServer.Behaviour
 
   alias IEx.Debugger.Runner
+  alias IEx.Debugger.PIDTable
+  alias IEx.Debugger.Shell
 
   @server_name { :global, :controller }
 
-  defrecord State, [client: nil, processes: nil, patterns: []]
+  defrecord State, [current_shell: nil, breakpoints: []]
 
   def alive? do
     { _reg, name } = @server_name
@@ -23,8 +25,8 @@ defmodule IEx.Debugger.Controller do
     { :ok, pid }
   end
 
-  def init(client_pid) do
-    { :ok, State[client: client_pid, processes: HashDict.new] }
+  def init([]) do
+    { :ok, State[] }
   end
 
   def handle_call(:stop, _sender, dict) do
@@ -32,61 +34,38 @@ defmodule IEx.Debugger.Controller do
   end
   
   def handle_call(:list, _sender, state) do
-    { :reply, state.processes, state }
+    processes = Dict.keys(PIDTable.get_all)
+    { :reply, processes, state }
   end
   
-  def handle_call(:patterns, _sender, state) do
-    { :reply, state.patterns, state }
+  def handle_call(:breakpoints, _sender, state) do
+    { :reply, state.breakpoints, state }
   end
   
-  def handle_call({ :patterns, patterns }, _sender, state) do
-    { :reply, patterns, state.patterns(patterns) }
-  end
-
-  # The Controller keeps track of the processes 
-  # currently running, being notified through next.
-  def handle_cast({ :next, pid, expr }, state) do
-    if state.client do
-      #state.client <- { :debug, { :next, pid, expr }}
-      expr_str = Macro.to_string expr
-      matching = Enum.filter state.patterns, fn(pattern) ->
-        Regex.match? pattern, expr_str
-      end
-      unless Enum.empty? matching do
-        state.client <- { :debug, { :match, pid, expr, matching }}
-      end
-    end
-    step(pid)
-    { :noreply, state.processes(Dict.put(state.processes, pid, expr)) }
+  def handle_call({ :breakpoints, breakpoints }, _sender, state) do
+    companions = Dict.values(PIDTable.get_all)
+    Enum.each(companions, &(Companion.breakpoints(&1, breakpoints)))
+    { :reply, breakpoints, state.breakpoints(breakpoints) }
   end
 
   # interface methods
-  def patterns,        do: :gen_server.call(@server_name, :patterns)
-  def patterns(pat),   do: :gen_server.call(@server_name, { :patterns, pat })
-  def list,            do: :gen_server.call(@server_name, :list)
-  def step(pid),       do: Runner.continue(pid)
-  def next(pid, expr), do: :gen_server.cast(@server_name, { :next, pid, expr })
+  def breakpoints,        do: :gen_server.call(@server_name, :breakpoints)
+  def breakpoints(pat),   do: :gen_server.call(@server_name, { :breakpoints, pat })
+  def list,               do: :gen_server.call(@server_name, :list)
 
-  def authorize(expr) do
-    next(self, expr)
-    receive do
-      :continue -> :ok
-    end
+  def breakpoint(_matching, pid, expr) do
+    timeout = 1000
+    message = "Breakpoint at #{inspect pid}"
+    opts = [dot_iex_path: "", prefix: "dbg"]
+    Shell.take_over(message, opts, timeout)
+    :ok
   end
 
-  # those should be in UI
+  # TODO: those should be in some UI module
   def command(["list"], proc_list) do
     Enum.reduce proc_list, 0, fn({ pid, expr }, index) ->
       IO.puts "(#{index}) #{inspect pid}:\n\t#{Macro.to_string expr}"
       index + 1
-    end
-  end
-  def command(["step", index], proc_list) do
-    case Enum.at(proc_list, index) do
-      { :ok, { pid, _ }} -> 
-        step(pid)
-      :error ->
-        IO.puts "invalid index\n"
     end
   end
   def command(_, _), do: IO.puts "wat\n"

@@ -94,7 +94,7 @@ defmodule IEx.Debugger.RecordTest do
 
   test :dynamic_update do
     record = dynamic_name_new
-    assert record.update_a(10 + &1).a == 10
+    assert record.update_a(&(10 + &1)).a == 10
   end
 
   test :is_record do

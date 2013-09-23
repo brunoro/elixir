@@ -13,7 +13,7 @@ defmodule IEx.Debugger do
     quote do
       def unquote(header) do
         IEx.Debugger.PIDTable.start_link
-        IEx.Debugger.Controller.start_link(client: nil)
+        IEx.Debugger.Controller.start_link
         unquote(wrapped_body)
       end
     end
@@ -57,6 +57,11 @@ defmodule IEx.Debugger do
     { :defmodule, meta, wrap_do }
   end
   def wrap_quoted({ :def, meta, right }) do
+    [header, [do: body]] = right
+    { :def, meta, [header, [do: Runner.wrap_next_clause(body)]] }
+  end
+  # TODO: check calling context for private functions
+  def wrap_quoted({ :defp, meta, right }) do
     [header, [do: body]] = right
     { :def, meta, [header, [do: Runner.wrap_next_clause(body)]] }
   end

@@ -14,9 +14,9 @@ defmodule IEx.Helpers do
   * `c/2`       — compiles a file at the given path
   * `cd/1`      — changes the current directory
   * `clear/0`   — clears the screen
+  * `db/0`      — gets debugger breakpoints 
+  * `db/1`      — sets debugger breakpoints 
   * `dc/2`      — compiles a file at the given path with debugging calls
-  * `dpg/0`   — gets patterns to be traced by debugger
-  * `dps/1`   — sets patterns to be traced by debugger
   * `flush/0`   — flushes all messages sent to the shell
   * `h/0`       — prints this help message
   * `h/1`       — prints help for the given module, function or macro
@@ -105,17 +105,18 @@ defmodule IEx.Helpers do
   end
 
   @doc """
-  Gets patterns being traced by the debugger.
+  Gets debugger breakpoints.
   """
-  def dpg do
-    IEx.Debugger.Controller.patterns
+  def db do
+    IEx.Debugger.Controller.breakpoints
   end
 
   @doc """
-  Sets patterns being traced by the debugger.
+  Sets debugger breakpoints.
   """
-  def dps(pat) do
-    IEx.Debugger.Controller.patterns(pat)
+  def db(breakpoints) when is_list(breakpoints) do
+    # TODO: validate breakpoints
+    IEx.Debugger.Controller.breakpoints(breakpoints)
   end
 
   @doc """

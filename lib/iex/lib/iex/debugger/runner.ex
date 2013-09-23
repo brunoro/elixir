@@ -1,31 +1,31 @@
 defmodule IEx.Debugger.Runner do
-  alias IEx.Debugger.StateServer
+  alias IEx.Debugger.Companion
   alias IEx.Debugger.Evaluator
   alias IEx.Debugger.PIDTable
   alias IEx.Debugger.Runner
   alias IEx.Debugger.Controller
 
-  # functions manipulating state coming from StateServer
-  def change_state(fun) do
-    state_server = PIDTable.get(self)
-    state = StateServer.get(state_server)
+  # functions manipulating state coming from Companion
+  defp change_state(fun) do
+    companion = PIDTable.get(self)
+    state = Companion.get_state(companion)
 
     case fun.(state) do
       { :exception, kind, reason, stacktrace } ->
         { :exception, kind, reason, stacktrace }
       { status, result, new_state } ->
-        StateServer.put(state_server, new_state)
+        Companion.put_state(companion, new_state)
         { status, result }
     end
   end
 
-  def eval_change_state(expr) do
+  defp eval_change_state(expr) do
     change_state &Evaluator.escape_and_eval(expr, &1)
   end
 
-  def with_state(fun) do
-    state_server = PIDTable.get(self)
-    state = StateServer.get(state_server)
+  defp with_state(fun) do
+    companion = PIDTable.get(self)
+    state = Companion.get_state(companion)
 
     case fun.(state) do
       { :exception, kind, reason, stacktrace } ->
@@ -37,24 +37,26 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
-  def eval_with_state(expr) do
+  defp eval_with_state(expr) do
     with_state &Evaluator.escape_and_eval(expr, &1)
   end
 
   # run fun on a state to be discarded
-  def do_and_discard_state(fun) do
-    state_server = PIDTable.get(self)
-    StateServer.push_stack(state_server)
+  defp do_and_discard_state(fun) do
+    companion = PIDTable.get(self)
+    Companion.push_stack(companion)
     result = fun.()
-    StateServer.pop_stack(state_server)
+    Companion.pop_stack(companion)
 
     result
   end
 
   defp kernel_macros do
-    state_server = PIDTable.get(self)
-    state = StateServer.get(state_server)
-    elem(state.scope, 22)[Kernel] # check Debugger.Evaluator for elixir_scope indexes
+    companion = PIDTable.get(self)
+    state = Companion.get_state(companion)
+    # indexes for elixir_scope as on the Debugger.Evaluator comment
+    # TODO: check this
+    elem(state.scope, 22)[Kernel] || [] 
   end
 
   # expand expr and run fun/0 
@@ -79,7 +81,7 @@ defmodule IEx.Debugger.Runner do
 
   # maps fun |> filter over col while fun |> condition is true
   # otherwise returns fun(failing_element)
-  def filter_map_while(col, condition, filter, fun) do 
+  defp filter_map_while(col, condition, filter, fun) do 
     ret = do_filter_map_while(col, condition, filter, fun, [])
     case ret do
       list when is_list(list) ->
@@ -101,7 +103,7 @@ defmodule IEx.Debugger.Runner do
 
   # maps next/1 while status returned is :ok, otherwise returns the
   # failing element of the list with its status
-  def map_next_while_ok(expr_list) do
+  defp map_next_while_ok(expr_list) do
     v = filter_map_while(expr_list, &is_status_ok?(&1), &strip_status(&1), &next(&1))
     case v do
       value_list when is_list(value_list) ->
@@ -114,7 +116,7 @@ defmodule IEx.Debugger.Runner do
   # result has the { status, result } form
   # runs fun(result) if status matches the parameter
   # otherwise returns result
-  def if_status(status, result, fun) do
+  defp if_status(status, result, fun) do
     case result do
       { ^status, value } ->
         fun.(value)
@@ -123,15 +125,13 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
-  def is_status_ok?({ status, _ }), do: status == :ok
-  def is_status_ok?({ status, _, _ }), do: status == :ok
-  def is_status_ok?({ status, _, _, _ }), do: status == :ok
+  defp is_status_ok?({ status, _ }), do: status == :ok
+  defp is_status_ok?({ status, _, _ }), do: status == :ok
+  defp is_status_ok?({ status, _, _, _ }), do: status == :ok
 
   # removes status from a Runner return value
   def strip_status({ _, a }), do: a
   def strip_status({ _, a, b }), do: { a, b }
-
-  def continue(runner_pid), do: runner_pid <- :continue
 
   # prepare values for injecting into quoted source
   defp prepare_value({ :fn, meta, clauses }), do: { :fn, meta, clauses }
@@ -148,6 +148,11 @@ defmodule IEx.Debugger.Runner do
   defp fn_from_second({ left, meta, r1 }, { left, _, r2 }), do: { left, meta, fn_from_second(r1, r2) }
   defp fn_from_second(first, _),                            do: first
 
+  defp authorize(expr) do
+    companion = PIDTable.get(self)
+    Companion.next(companion, expr)
+  end
+
   ## next/1
   # makes nested next calls until leafs are reached.
   # keeps the current scope and binding
@@ -158,7 +163,7 @@ defmodule IEx.Debugger.Runner do
 
   # anonymous functions
   def do_next(expr={ :fn, meta, [[do: body]] }) do
-    Controller.authorize(expr)
+    authorize(expr)
     next_body = wrap_next_arrow(body)
     { :ok, { :fn, meta, [[do: next_body]] }}
   end
@@ -169,20 +174,20 @@ defmodule IEx.Debugger.Runner do
     condition_value = prepare_value(condition_value)
 
     expr_condition_value = { :case, meta, [condition_value | [[do: clauses]]] }
-    Controller.authorize(fn_from_second(expr_condition_value, expr))
+    authorize(fn_from_second(expr_condition_value, expr))
     match_next(condition_value, clauses) # is there more than do?
   end
 
   # receive
   def do_next(expr={ :receive, _, [[do: clauses]] }) do
-    Controller.authorize(expr)
+    authorize(expr)
     { :receive, received_value } = with_state &Evaluator.do_receive(&1)
     match_next(prepare_value(received_value), clauses) 
   end
 
   # receive-after
   def do_next(expr={ :receive, _, [[do: do_clauses, after: after_clause]] }) do
-    Controller.authorize(expr)
+    authorize(expr)
     {:->, _, [{ [after_time], _, after_expr }]} = after_clause
 
     case with_state &Evaluator.do_receive(&1, after_time) do
@@ -195,7 +200,7 @@ defmodule IEx.Debugger.Runner do
 
   # try
   def do_next(expr={ :try, _, [clauses] }) do
-    Controller.authorize(expr)
+    authorize(expr)
     do_clause = clauses[:do]
     # variables defined on try block aren't accessible outside it
     do_result = next(do_clause)
@@ -217,7 +222,7 @@ defmodule IEx.Debugger.Runner do
   def do_next(expr={ :=, meta, [left | [right]] }) do
     if_status :ok, next(right), fn(right_value) ->
       expr_value = { :=, meta, [left | [prepare_value(right_value)]] }
-      Controller.authorize(fn_from_second(expr_value, expr))
+      authorize(fn_from_second(expr_value, expr))
       eval_change_state(expr_value)
     end
   end
@@ -228,29 +233,29 @@ defmodule IEx.Debugger.Runner do
       if_status :ok, map_next_while_ok(expr_list), fn(value_list) ->
         nice_value_list = Enum.map(value_list, &prepare_value/1)
         expr_value = { type, meta, nice_value_list }
-        Controller.authorize(fn_from_second(expr_value, expr))
+        authorize(fn_from_second(expr_value, expr))
         eval_change_state(expr_value)
       end
     end
   end
 
   # other expressions are evaluated directly
-  def do_next(expr={ left, meta, right }) do
+  def do_next(expr={ _left, _meta, _right }) do
     do_or_expand expr, fn ->
-      Controller.authorize(expr)
+      authorize(expr)
       eval_change_state(expr)
     end
   end
 
   # lists aren't escaped like tuples
   def do_next(expr_list) when is_list(expr_list) do
-    Controller.authorize(expr_list)
+    authorize(expr_list)
     map_next_while_ok(expr_list)
   end
   
   # other tuples?
   def do_next(expr_tuple) when is_tuple(expr_tuple) do
-    Controller.authorize(expr_tuple)
+    authorize(expr_tuple)
 
     expr_list = tuple_to_list(expr_tuple)
     # TODO: also check for exceptions here
@@ -324,8 +329,8 @@ defmodule IEx.Debugger.Runner do
           # but setting scope.vars to nil forces the the runtime to fetch them
           binding = Kernel.binding
           scope   = :elixir_scope.to_erl_env(__ENV__.vars(nil))
-        state_server ->
-          state   = StateServer.get(state_server)
+        companion ->
+          state   = Companion.get_state(companion)
           binding = Keyword.merge(state.binding, Kernel.binding)
           scope   = :elixir_scope.vars_from_binding(state.scope, binding)
       end
