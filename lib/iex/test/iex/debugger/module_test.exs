@@ -15,24 +15,25 @@ defmodule IEx.Debugger.ModuleTest do
   def get(State[a: a]), do: a
 
   defdebugmodule Nested do
-    defmodule A do
-      def foo(x) do
-        B.bar(x) * 2
-      end
-    end
-
-    defmodule B do
+    defmodule AA do
       def bar(x) do
         x * x
       end
     end
+
+    defmodule A do
+      def foo(x) do
+        AA.bar(x) * 2
+      end
+    end
+
     def foobar(x) do
       A.foo(x) + 1
     end
   end
 
   test "nested modules" do
-    assert Nested.B.bar(3) == 9
+    assert Nested.AA.bar(3) == 9
     assert Nested.A.foo(3) == 18
     assert Nested.foobar(3) == 19
   end

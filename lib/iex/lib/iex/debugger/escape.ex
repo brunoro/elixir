@@ -23,7 +23,7 @@ defmodule IEx.Debugger.Escape do
 
   # #PID<0.49.0> -> :__PID_0_49_0__
   def escape(pid) when is_pid(pid) do
-    esc_pid = pid |> pid_to_list 
+    esc_pid = pid |> :erlang.pid_to_list
                   |> to_string
                   |> String.replace("<", "")
                   |> String.replace(">", "")
