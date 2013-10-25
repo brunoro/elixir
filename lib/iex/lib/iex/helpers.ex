@@ -17,6 +17,7 @@ defmodule IEx.Helpers do
   * `db/0`      — gets debugger breakpoints 
   * `db/1`      — sets debugger breakpoints 
   * `dc/2`      — compiles a file at the given path with debugging calls
+  * `ds/0`      — starts a debug shell on the first debug event
   * `flush/0`   — flushes all messages sent to the shell
   * `h/0`       — prints this help message
   * `h/1`       — prints help for the given module, function or macro
@@ -117,6 +118,14 @@ defmodule IEx.Helpers do
   def db(breakpoints) when is_list(breakpoints) do
     # TODO: validate breakpoints
     IEx.Debugger.Controller.breakpoints(breakpoints)
+    breakpoints
+  end
+
+  @doc """
+  Starts a debug shell when debugged code is runned.
+  """
+  def ds do
+    IEx.Debugger.Controller.shell_next(true)
   end
 
   @doc """

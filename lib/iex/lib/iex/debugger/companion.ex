@@ -1,48 +1,70 @@
+defrecord IEx.Debugger.State, [binding: nil, scope: nil, stack: []]
+
 defmodule IEx.Debugger.Companion do
   use GenServer.Behaviour
 
   alias IEx.Debugger.Controller
+  alias IEx.Debugger.State
 
-  defrecord State, [binding: nil, scope: nil, stack: []]
+  defrecord Data, [state: State[], breakpoints: [], active_breakpoints: [], shell_next: false, expr: nil]
 
   # public interface
-  def start_link(binding, scope, breakpoints) do
+  def start_link(binding, scope, breakpoints // [], shell_next // false) do
     state = State[binding: binding, scope: scope]
-    :gen_server.start_link(__MODULE__, { state, []}, [])
+    data = Data[state: state, breakpoints: breakpoints, shell_next: shell_next]
+    :gen_server.start_link(__MODULE__, data, [])
   end
 
   # gen_server methods
-  def init({ state, breakpoints }) do
+  def init(data) do
+    state = data.state
     scope = :elixir_scope.vars_from_binding(state.scope, state.binding)
-    { :ok, { state.scope(scope), breakpoints }}
+    new_state = state.scope(scope)
+    { :ok, data.state(new_state) }
   end
     
   ## handle_call
-  def handle_call(:get_state, _sender, { state, breakpoints }) do
-    { :reply, state, { state, breakpoints }}
+  def handle_call(:get_state, _sender, data) do
+    { :reply, data.state, data}
+  end
+  
+  def handle_call(:breakpoints, _sender, data) do
+    { :reply, data.breakpoints, data}
+  end
+  
+  def handle_call(:shell_next, _sender, data) do
+    { :reply, data.shell_next, data}
   end
 
-  def handle_call({ :next, expr }, { pid, _ref }, { state, breakpoints }) do
-    #state.client <- { :debug, { :next, pid, expr }}
-    matching = Enum.filter breakpoints, fn({ file, line }) ->
-      # TODO: this won't work for most expressions!!
+  def handle_call(:expr, _sender, data) do
+    { :reply, data.expr, data}
+  end
+
+  def handle_call(:active_breakpoints, _sender, data) do
+    { :reply, data.active_breakpoints, data}
+  end
+
+  def handle_call({ :next, expr }, { pid, _ref }, data) do
+    # breakpoints
+    active = Enum.filter data.breakpoints, fn({ file, line }) ->
       { _, meta, _ } = expr
-      env_file = elem(state.scope, 19) # see comment on IEx.Debugger.Evaluator
+      env_file = elem(data.state.scope, 18) # see comment on IEx.Debugger.Evaluator
       (meta[:line] == line) and (env_file == file)
     end
-    unless Enum.empty? matching do
-      Controller.breakpoint(matching, pid, expr)
-    end
-    { :reply, :ok, { state, breakpoints }}
-  end
 
-  def handle_call({ :eval, expr }, _sender, { state, breakpoints }) do
-    case Evaluator.eval_quoted(expr, state) do
-      { :ok, value, new_state } ->
-        { :reply, { :ok, value }, { new_state, breakpoints }}
-      exception ->
-        {{ :reply, exception }, { state, breakpoints }}
+    response = if Enum.empty?(active) do
+      # breakpoints have priority over shell_next
+      if (data.shell_next) do
+        Controller.shell_next(false)
+        Controller.start_shell(pid)
+      end
+      :go
+    else
+      Controller.start_shell(pid)
+      :wait
     end
+
+    { :reply, response, data.active_breakpoints(active).expr(expr) }
   end
 
   ## handle_cast
@@ -50,28 +72,41 @@ defmodule IEx.Debugger.Companion do
     { :stop, :normal, data }
   end
 
-  def handle_cast(:pop_stack, { state, breakpoints }) do
-    new_state = case state.stack do
+  def handle_cast(:pop_stack, data) do
+    new_state = case data.state.stack do
       [] ->
-        state
+        data.state
       [{ binding, scope } | rest] ->
         State[binding: binding, scope: scope, stack: rest]
     end
-    { :noreply, { new_state, breakpoints }}
+    { :noreply, data.state(new_state) }
   end
 
-  def handle_cast(:push_stack, { state, breakpoints }) do
+  def handle_cast(:push_stack, data) do
+    state = data.state
     new_state = state.stack([{ state.binding, state.scope } | state.stack])
-    { :noreply, { new_state, breakpoints }}
+    { :noreply, data.state(new_state) }
   end
 
-  def handle_cast({ :put_state, new_state }, { _state, breakpoints }) do
-    { :noreply, { new_state, breakpoints }}
+  def handle_cast({ :put_state, new_state }, data) do
+    { :noreply, data.state(new_state) }
+  end
+  
+  def handle_cast({ :breakpoints, breakpoints}, data) do
+    { :noreply, data.breakpoints(breakpoints) }
+  end
+  
+  def handle_cast({ :shell_next, bool }, data) do
+    { :noreply, data.shell_next(bool) }
   end
 
   # controller functions
-  def breakpoints(pid),       do: :gen_server.call(pid, :breakpoints)
-  def breakpoints(pid, bp),   do: :gen_server.call(pid, { :breakpoints, bp })
+  def expr(pid),               do: :gen_server.call(pid, :expr)
+  def shell_next(pid),         do: :gen_server.call(pid, :shell_next)
+  def shell_next(pid, bool),   do: :gen_server.cast(pid, { :shell_next, bool })
+  def breakpoints(pid),        do: :gen_server.call(pid, :breakpoints)
+  def breakpoints(pid, bp),    do: :gen_server.cast(pid, { :breakpoints, bp })
+  def active_breakpoints(pid), do: :gen_server.call(pid, :active_breakpoints)
 
   # client functions
   def done(pid),             do: :gen_server.cast(pid, :done)

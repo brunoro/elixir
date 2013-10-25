@@ -6,7 +6,7 @@ defmodule IEx.Debugger.Supervisor do
     :supervisor.start_link(__MODULE__, opts)
   end
   
-  def init(opts) do
+  def init(_opts) do
     children = [
       # Define workers and child supervisors to be supervised
       worker(IEx.Debugger.PIDTable, []),

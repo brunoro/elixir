@@ -148,9 +148,24 @@ defmodule IEx.Debugger.Runner do
   defp fn_from_second({ left, meta, r1 }, { left, _, r2 }), do: { left, meta, fn_from_second(r1, r2) }
   defp fn_from_second(first, _),                            do: first
 
+  defp receive_eval_or_go do
+    receive do
+      :go -> 
+        :ok
+      { :eval, from, expr } ->
+        from <- { self, eval_change_state(expr) }
+        receive_eval_or_go
+    end
+  end
+
   defp authorize(expr) do
     companion = PIDTable.get(self)
-    Companion.next(companion, expr)
+    case Companion.next(companion, expr) do
+      :wait -> 
+        receive_eval_or_go
+      :go -> 
+        :ok
+    end
   end
 
   ## next/1
