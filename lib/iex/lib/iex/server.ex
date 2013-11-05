@@ -155,6 +155,7 @@ defmodule IEx.Server do
       # Message either go back to the main loop or exit.
       { :evaled, ^evaluator, config } ->
         loop(config, evaluator, evaluator_ref)
+
       { :input, ^input, code } when is_binary(code) ->
         evaluator <- { :eval, self, code, config }
         wait_eval(evaluator, evaluator_ref)

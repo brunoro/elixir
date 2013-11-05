@@ -1,15 +1,12 @@
-defmodule IEx.Helpers do
+defmodule IEx.Debugger.Helpers do
   @moduledoc """
-  Welcome to Interactive Elixir. You are currently
-  seeing the documentation for the module `IEx.Helpers`
-  which provides many helpers to make Elixir's shell
-  more joyful to work with.
+  Welcome to the Elixir Debugger. You are currently
+  seeing the documentation for the module `IEx.Debugger.Helpers`
+  which provides helpers on top of Elixir's shell own helpers
+  to enable debugging functionalities.
 
-  This message was triggered by invoking the helper
-  `h()`, usually referred to as `h/0` (since it expects 0
-  arguments).
-
-  There are many other helpers available:
+  This message was triggered by invoking the helper `h/0`
+  All of the helpers available on IEx are also available here:
 
   * `c/2`       — compiles a file at the given path
   * `cd/1`      — changes the current directory
@@ -32,21 +29,83 @@ defmodule IEx.Helpers do
   * `import_file/1`
                 — evaluates the given file in the shell's context
 
-  Help for functions in this module can be consulted
-  directly from the command line, as an example, try:
+  And some debugger-specific helpers are also available:
 
-      h(c/2)
-
-  You can also retrieve the documentation for any module
-  or function. Try these:
-
-      h(Enum)
-      h(Enum.reverse/1)
-
-  To learn more about IEx as a whole, just type `h(IEx)`.
+  * `db/0`  — gets debugger breakpoints 
+  * `db/1`  — sets debugger breakpoints 
+  * `dc/2`  — compiles a file at the given path with debugging calls
+  * `dl/1`  — lists the current debugged processes
+  * `ds/1`  — starts a debug shell on a given process
+  * `dr/1`  — runs again a process stuck at a breakpoint
   """
 
   import IEx, only: [dont_display_result: 0]
+  alias IEx.Debugger.Controller
+
+  @doc """
+  Compile files for debugging. Behaves the same way as `c/2`
+  """
+  def dc(files, path // ".") do
+    exs = Enum.filter(List.wrap(files), &String.ends_with?(&1, [".ex", ".exs"]))
+    Enum.flat_map(exs, fn(ex) ->
+      { :ok, modlist } = IEx.Debugger.debug_compile(ex, path)
+      [modules, _binaries] = List.unzip(modlist)
+      modules
+    end)
+  end
+
+  @doc """
+  Gets debugger breakpoints.
+  """
+  def db do
+    IEx.Debugger.Controller.breakpoints
+  end
+
+  @doc """
+  Sets debugger breakpoints.
+  """
+  def db(breakpoints) when is_list(breakpoints) do
+    # TODO: validate breakpoints
+    IEx.Debugger.Controller.breakpoints(breakpoints)
+    breakpoints
+  end
+
+  @doc """
+  Lists the current debugged processes
+  """
+  def dl do
+    Controller.list
+  end
+
+  @doc """
+  Runs again a process stuck at a breakpoint
+  """
+  def dr(pid_str) do
+    pid = pid_str |> to_char_list
+                  |> :erlang.list_to_pid
+    Controller.run(pid)
+  end
+
+  # TODO: this is just a copy of m/0 for now
+  @doc """
+  Prints the list of all loaded modules compiled for debugging
+  with paths to their corresponding `.beam` files.
+  """
+  def dm do
+    all    = Enum.map :code.all_loaded, fn { mod, file } -> { inspect(mod), file } end
+    sorted = Enum.sort all
+    size   = Enum.reduce sorted, 0, fn({ mod, _ }, acc) -> max(byte_size(mod), acc) end
+    format = "~-#{size}s ~ts~n"
+
+    Enum.each sorted, fn({ mod, file }) ->
+      :io.format(format, [mod, file])
+    end
+    dont_display_result
+  end
+
+  ## NOTICE
+  ## Everything down from here is copied from IEx.Helpers
+  ##
 
   @doc """
   Expects a list of files to compile and a path
@@ -70,16 +129,7 @@ defmodule IEx.Helpers do
       raise ArgumentError, message: "expected a binary or a list of binaries as argument"
     end
 
-    { found, not_found } = Enum.map(files, &Path.join(path, &1)) |> Enum.partition(&File.exists?/1)
-
-    unless Enum.empty?(not_found) do
-      IO.puts IEx.color(:eval_error, %s[Cannot find #{Enum.join(not_found, ", ")}])
-      unless Enum.empty?(found) do
-        IO.puts IEx.color(:eval_info, "(remaining file(s) will be compiled)")
-      end
-    end
-
-    { erls, exs } = Enum.partition(found, &String.ends_with?(&1, ".erl"))
+    { erls, exs } = Enum.partition(files, &String.ends_with?(&1, ".erl"))
 
     modules = Enum.map(erls, fn(source) ->
       { module, binary } = compile_erlang(source)
@@ -129,7 +179,8 @@ defmodule IEx.Helpers do
   Prints the documentation for `IEx.Helpers`.
   """
   def h() do
-    IEx.Introspection.h(IEx.Helpers)
+    # well, this line below isn't copied from IEx.Helpers
+    IEx.Introspection.h(IEx.Debugger.Helpers) 
     dont_display_result
   end
 

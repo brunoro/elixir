@@ -8,7 +8,7 @@ defmodule IEx.Debugger.Controller do
 
   @server_name { :global, :controller }
 
-  defrecord Data, [breakpoints: [], shell_next: []]
+  defrecord Data, [breakpoints: [], shell_next: false]
 
   def alive? do
     { _reg, name } = @server_name
@@ -41,17 +41,28 @@ defmodule IEx.Debugger.Controller do
     Enum.each(companions, &(Companion.breakpoints(&1, breakpoints)))
     { :noreply, data.breakpoints(breakpoints) }
   end
+  
+  def handle_cast({ :run, pid }, data) do
+    if at_breakpoint?(pid) do
+      pid <- :go
+    end
+
+    { :noreply, data }
+  end
 
   def handle_call(:stop, _sender, data) do
     { :stop, :normal, :shutdown_ok, data }
   end
   
   def handle_call({ :eval, pid, expr }, _sender, data) do
-    # TODO: check if pid is on a breakpoint
-    pid <- { :eval, self, expr }
-    receive do
-      { ^pid, result } ->
-        { :reply, result, data }
+    if at_breakpoint?(pid) do
+      pid <- { :eval, self, expr }
+      receive do
+        { ^pid, result } ->
+          { :reply, result, data }
+      end
+    else
+      { :reply, :running, data }
     end
   end
   
@@ -82,6 +93,7 @@ defmodule IEx.Debugger.Controller do
   end
   
   # interface methods
+  def run(pid),         do: :gen_server.cast(@server_name, { :run, pid })
   def eval(pid, expr),  do: :gen_server.call(@server_name, { :eval, pid, expr })
   def shell_next,       do: :gen_server.call(@server_name, :shell_next)
   def shell_next(bool), do: :gen_server.cast(@server_name, { :shell_next, bool })
@@ -90,11 +102,8 @@ defmodule IEx.Debugger.Controller do
   def list,             do: :gen_server.call(@server_name, :list)
   def binding(pid),     do: :gen_server.call(@server_name, { :binding, pid })
 
-  # companion methods
-  def start_shell(pid) do
-    timeout = 1000
-    message = "Debug event at #{inspect pid}, starting debug shell"
-    opts = [dot_iex_path: "", prefix: "dbg"]
-    spawn fn -> Shell.take_over(message, opts, timeout) end
+  defp at_breakpoint?(pid) do
+    companion = PIDTable.get(pid)
+    not Enum.empty?(Companion.active_breakpoints(companion))
   end
 end
