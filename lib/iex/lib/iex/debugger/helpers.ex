@@ -1,15 +1,12 @@
-defmodule IEx.Helpers do
+defmodule IEx.Debugger.Helpers do
   @moduledoc """
-  Welcome to Interactive Elixir. You are currently
-  seeing the documentation for the module `IEx.Helpers`
-  which provides many helpers to make Elixir's shell
-  more joyful to work with.
+  Welcome to the Elixir Debugger. You are currently
+  seeing the documentation for the module `IEx.Debugger.Helpers`
+  which provides helpers on top of Elixir's shell own helpers
+  to enable debugging functionalities.
 
-  This message was triggered by invoking the helper
-  `h()`, usually referred to as `h/0` (since it expects 0
-  arguments).
-
-  There are many other helpers available:
+  This message was triggered by invoking the helper `h/0`
+  All of the helpers available on IEx are also available here:
 
   * `c/2`       — compiles a file at the given path
   * `cd/1`      — changes the current directory
@@ -21,6 +18,7 @@ defmodule IEx.Helpers do
   * `l/1`       — loads the given module's beam code and purges the current version
   * `ls/0`      — lists the contents of the current directory
   * `ls/1`      — lists the contents of the specified directory
+  * `m/0`       — prints loaded modules
   * `pwd/0`     — prints the current working directory
   * `r/1`       — recompiles and reloads the given module's source file
   * `respawn/0` — respawns the current shell
@@ -31,21 +29,83 @@ defmodule IEx.Helpers do
   * `import_file/1`
                 — evaluates the given file in the shell's context
 
-  Help for functions in this module can be consulted
-  directly from the command line, as an example, try:
+  And some debugger-specific helpers are also available:
 
-      h(c/2)
-
-  You can also retrieve the documentation for any module
-  or function. Try these:
-
-      h(Enum)
-      h(Enum.reverse/1)
-
-  To learn more about IEx as a whole, just type `h(IEx)`.
+  * `db/0`  — gets debugger breakpoints 
+  * `db/1`  — sets debugger breakpoints 
+  * `dc/2`  — compiles a file at the given path with debugging calls
+  * `dl/1`  — lists the current debugged processes
+  * `ds/1`  — starts a debug shell on a given process
+  * `dr/1`  — runs again a process stuck at a breakpoint
   """
 
   import IEx, only: [dont_display_result: 0]
+  alias IEx.Debugger.Controller
+
+  @doc """
+  Compile files for debugging. Behaves the same way as `c/2`
+  """
+  def dc(files, path // ".") do
+    exs = Enum.filter(List.wrap(files), &String.ends_with?(&1, [".ex", ".exs"]))
+    Enum.flat_map(exs, fn(ex) ->
+      { :ok, modlist } = IEx.Debugger.debug_compile(ex, path)
+      [modules, _binaries] = List.unzip(modlist)
+      modules
+    end)
+  end
+
+  @doc """
+  Gets debugger breakpoints.
+  """
+  def db do
+    IEx.Debugger.Controller.breakpoints
+  end
+
+  @doc """
+  Sets debugger breakpoints.
+  """
+  def db(breakpoints) when is_list(breakpoints) do
+    # TODO: validate breakpoints
+    IEx.Debugger.Controller.breakpoints(breakpoints)
+    breakpoints
+  end
+
+  @doc """
+  Lists the current debugged processes
+  """
+  def dl do
+    Controller.list
+  end
+
+  @doc """
+  Runs again a process stuck at a breakpoint
+  """
+  def dr(pid_str) do
+    pid = pid_str |> to_char_list
+                  |> :erlang.list_to_pid
+    Controller.run(pid)
+  end
+
+  # TODO: this is just a copy of m/0 for now
+  @doc """
+  Prints the list of all loaded modules compiled for debugging
+  with paths to their corresponding `.beam` files.
+  """
+  def dm do
+    all    = Enum.map :code.all_loaded, fn { mod, file } -> { inspect(mod), file } end
+    sorted = Enum.sort all
+    size   = Enum.reduce sorted, 0, fn({ mod, _ }, acc) -> max(byte_size(mod), acc) end
+    format = "~-#{size}s ~ts~n"
+
+    Enum.each sorted, fn({ mod, file }) ->
+      :io.format(format, [mod, file])
+    end
+    dont_display_result
+  end
+
+  ## NOTICE
+  ## Everything down from here is copied from IEx.Helpers
+  ##
 
   @doc """
   Expects a list of files to compile and a path
@@ -62,28 +122,18 @@ defmodule IEx.Helpers do
       c "baz.ex"
       #=> [Baz]
   """
-  def c(files, path \\ ".") when is_binary(path) do
+  def c(files, path // ".") when is_binary(path) do
     files = List.wrap(files)
 
     unless Enum.all?(files, &is_binary/1) do
       raise ArgumentError, message: "expected a binary or a list of binaries as argument"
     end
 
-    { found, not_found } =
-      files
-      |> Enum.map(&Path.expand(&1, path))
-      |> Enum.partition(&File.exists?/1)
-
-    unless Enum.empty?(not_found) do
-      raise ArgumentError, message: "could not find files #{Enum.join(not_found, ", ")}"
-    end
-
-    { erls, exs } = Enum.partition(found, &String.ends_with?(&1, ".erl"))
+    { erls, exs } = Enum.partition(files, &String.ends_with?(&1, ".erl"))
 
     modules = Enum.map(erls, fn(source) ->
       { module, binary } = compile_erlang(source)
-      base = source |> Path.basename |> Path.rootname
-      File.write!(Path.join(path, base <> ".beam"), binary)
+      File.write!(Path.join(path, source), binary)
       module
     end)
 
@@ -110,10 +160,27 @@ defmodule IEx.Helpers do
 
 
   @doc """
+  Prints the list of all loaded modules with paths to
+  their corresponding `.beam` files.
+  """
+  def m do
+    all    = Enum.map :code.all_loaded, fn { mod, file } -> { inspect(mod), file } end
+    sorted = Enum.sort all
+    size   = Enum.reduce sorted, 0, fn({ mod, _ }, acc) -> max(byte_size(mod), acc) end
+    format = "~-#{size}s ~ts~n"
+
+    Enum.each sorted, fn({ mod, file }) ->
+      :io.format(format, [mod, file])
+    end
+    dont_display_result
+  end
+
+  @doc """
   Prints the documentation for `IEx.Helpers`.
   """
   def h() do
-    IEx.Introspection.h(IEx.Helpers)
+    # well, this line below isn't copied from IEx.Helpers
+    IEx.Introspection.h(IEx.Debugger.Helpers) 
     dont_display_result
   end
 
@@ -133,42 +200,60 @@ defmodule IEx.Helpers do
       h Enum.all?/2
       h Enum.all?
 
+  The h helper also accepts strings representing a function
+  name, useful for retrieving information about operators:
+
+      h "*"
+      h "+"
+      h "<>"
   """
-  @h_modules [__MODULE__, Kernel, Kernel.SpecialForms]
-
-  defmacro h({ :/, _, [call, arity] } = other) do
-    args =
-      case Macro.decompose_call(call) do
-        { _mod, :__info__, [] } when arity == 1 ->
-          [Module, :__info__, 1]
-        { mod, fun, [] } ->
-          [mod, fun, arity]
-        { fun, [] } ->
-          [@h_modules, fun, arity]
-        _ ->
-          [other]
-      end
-
+  # Special case for `h AnyModule.__info__/1`
+  defmacro h({ :/, _, [{ { :., _, [_mod, :__info__] }, _, [] }, 1] }) do
     quote do
-      IEx.Introspection.h(unquote_splicing(args))
+      IEx.Introspection.h(Module, :__info__, 1)
     end
   end
 
-  defmacro h(call) do
-    args =
-      case Macro.decompose_call(call) do
-        { _mod, :__info__, [] } ->
-          [Module, :__info__, 1]
-        { mod, fun, [] } ->
-          [mod, fun]
-        { fun, [] } ->
-          [@h_modules, fun]
-        _ ->
-          [call]
-      end
-
+  defmacro h({ :/, _, [{ { :., _, [mod, fun] }, _, [] }, arity] }) do
     quote do
-      IEx.Introspection.h(unquote_splicing(args))
+      IEx.Introspection.h(unquote(mod), unquote(fun), unquote(arity))
+    end
+  end
+
+  # Special case for `h AnyModule.__info__`
+  defmacro h({ { :., _, [_mod, :__info__] }, _, [] }) do
+    quote do
+      IEx.Introspection.h(Module, :__info__, 1)
+    end
+  end
+
+  defmacro h({ { :., _, [mod, fun] }, _, [] }) do
+    quote do
+      IEx.Introspection.h(unquote(mod), unquote(fun))
+    end
+  end
+
+  defmacro h({ :/, _, [{ fun, _, args }, arity] }) when args == [] or is_atom(args) do
+    quote do
+      IEx.Introspection.h(unquote(fun), unquote(arity))
+    end
+  end
+
+  defmacro h({ name, _, args }) when args == [] or is_atom(args) do
+    quote do
+      IEx.Introspection.h([unquote(__MODULE__), Kernel, Kernel.SpecialForms], unquote(name))
+    end
+  end
+
+  defmacro h(string) when is_binary(string) do
+    quote do
+      IEx.Introspection.h([unquote(__MODULE__), Kernel, Kernel.SpecialForms], binary_to_atom(unquote(string)))
+    end
+  end
+
+  defmacro h(other) do
+    quote do
+      IEx.Introspection.h(unquote(other))
     end
   end
 
@@ -217,29 +302,33 @@ defmodule IEx.Helpers do
       s(list_to_atom)
       s(list_to_atom/1)
   """
-  defmacro s({ :/, _, [call, arity] } = other) do
-    args =
-      case Macro.decompose_call(call) do
-        { mod, fun, [] } -> [mod, fun, arity]
-        { fun, [] } -> [Kernel, fun, arity]
-        _ -> [other]
-      end
-
+  defmacro s({ :/, _, [{ { :., _, [mod, fun] }, _, [] }, arity] }) do
     quote do
-      IEx.Introspection.s(unquote_splicing(args))
+      IEx.Introspection.s(unquote(mod), unquote(fun), unquote(arity))
     end
   end
 
-  defmacro s(call) do
-    args =
-      case Macro.decompose_call(call) do
-        { mod, fun, [] } -> [mod, fun]
-        { fun, [] } -> [Kernel, fun]
-        _ -> [call]
-      end
-
+  defmacro s({ { :., _, [mod, fun] }, _, [] }) do
     quote do
-      IEx.Introspection.s(unquote_splicing(args))
+      IEx.Introspection.s(unquote(mod), unquote(fun))
+    end
+  end
+
+  defmacro s({ fun, _, args }) when args == [] or is_atom(args) do
+    quote do
+      IEx.Introspection.s(Kernel, unquote(fun))
+    end
+  end
+
+  defmacro s({ :/, _, [{ fun, _, args }, arity] }) when args == [] or is_atom(args) do
+    quote do
+      IEx.Introspection.s(Kernel, unquote(fun), unquote(arity))
+    end
+  end
+
+  defmacro s(module) do
+    quote do
+      IEx.Introspection.s(unquote(module))
     end
   end
 
@@ -275,23 +364,16 @@ defmodule IEx.Helpers do
   """
   def r(module) when is_atom(module) do
     case do_r(module) do
-      mods when is_list(mods) -> { :reloaded, module, mods }
+      mods when is_list(mods) -> { module, mods }
       other -> other
     end
   end
 
   defp do_r(module) do
-    unless Code.ensure_loaded?(module) do
-      raise ArgumentError, message: "could not load nor find module: #{inspect module}"
-    end
-
     source = source(module)
     cond do
       source == nil ->
-        raise ArgumentError, message: "could not find source for module: #{inspect module}"
-
-      not File.exists?(source) ->
-        raise ArgumentError, message: "could not find source (#{source}) for module: #{inspect module}"
+        :nosource
 
       String.ends_with?(source, ".erl") ->
         [compile_erlang(source) |> elem(0)]
@@ -359,7 +441,7 @@ defmodule IEx.Helpers do
   Produces a simple list of a directory's contents.
   If `path` points to a file, prints its full path.
   """
-  def ls(path \\ ".") when is_binary(path) do
+  def ls(path // ".") when is_binary(path) do
     path = expand_home(path)
     case File.ls(path) do
       { :ok, items } ->
@@ -425,7 +507,7 @@ defmodule IEx.Helpers do
   """
   def respawn do
     if whereis = IEx.Server.whereis do
-      send whereis, { :respawn, self }
+      whereis <- { :respawn, self }
       true
     else
       false

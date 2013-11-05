@@ -6,7 +6,9 @@ defmodule IEx.Debugger.Companion do
   alias IEx.Debugger.Controller
   alias IEx.Debugger.State
 
-  defrecord Data, [state: State[], breakpoints: [], active_breakpoints: [], shell_next: false, expr: nil]
+  defrecord Data, [state: State[], 
+                   breakpoints: [], active_breakpoints: [], 
+                   shell_next: false, expr: nil]
 
   # public interface
   def start_link(binding, scope, breakpoints // [], shell_next // false) do
@@ -56,11 +58,11 @@ defmodule IEx.Debugger.Companion do
       # breakpoints have priority over shell_next
       if (data.shell_next) do
         Controller.shell_next(false)
-        Controller.start_shell(pid)
+        Shell.event(pid)
       end
       :go
     else
-      Controller.start_shell(pid)
+      Shell.event(pid)
       :wait
     end
 
@@ -111,7 +113,6 @@ defmodule IEx.Debugger.Companion do
   # client functions
   def done(pid),             do: :gen_server.cast(pid, :done)
   def next(pid, expr),       do: :gen_server.call(pid, { :next, expr })
-  def eval(pid, expr),       do: :gen_server.call(pid, { :eval, expr })
 
   def get_state(pid),        do: :gen_server.call(pid, :get_state)
   def put_state(pid, state), do: :gen_server.cast(pid, { :put_state, state })

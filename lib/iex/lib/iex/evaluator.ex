@@ -97,7 +97,7 @@ defmodule IEx.Evaluator do
   #
   @break_trigger '#iex:break\n'
 
-  defp eval(code, config) do
+  def eval(code, config) do
     try do
       do_eval(String.to_char_list!(code), config)
     catch
@@ -107,15 +107,15 @@ defmodule IEx.Evaluator do
     end
   end
 
-  defp do_eval(@break_trigger, config=Config[cache: '']) do
+  def do_eval(@break_trigger, config=Config[cache: '']) do
     config
   end
 
-  defp do_eval(@break_trigger, config) do
+  def do_eval(@break_trigger, config) do
     :elixir_errors.parse_error(config.counter, "iex", "incomplete expression", "")
   end
 
-  defp do_eval(latest_input, config) do
+  def do_eval(latest_input, config) do
     code = config.cache ++ latest_input
     line = config.counter
 
@@ -143,11 +143,11 @@ defmodule IEx.Evaluator do
     IEx.History.append({ counter, cache, result }, counter, IEx.Options.get(:history_size))
   end
 
-  defp io_put(result) do
+  def io_put(result) do
     IO.puts :stdio, IEx.color(:eval_result, inspect(result, inspect_opts))
   end
 
-  defp io_error(result) do
+  def io_error(result) do
     IO.puts :stdio, IEx.color(:eval_error, result)
   end
 
@@ -160,21 +160,20 @@ defmodule IEx.Evaluator do
   end
 
   ## Error handling
-
-  defp print_error(:error, exception, stacktrace) do
+  def print_error(:error, exception, stacktrace) do
     { exception, stacktrace } = normalize_exception(exception, stacktrace)
     print_stacktrace stacktrace, fn ->
       "** (#{inspect exception.__record__(:name)}) #{exception.message}"
     end
   end
 
-  defp print_error(kind, reason, stacktrace) do
+  def print_error(kind, reason, stacktrace) do
     print_stacktrace stacktrace, fn ->
       "** (#{kind}) #{inspect(reason)}"
     end
   end
 
-  defp print_exit(pid, reason) do
+  def print_exit(pid, reason) do
     io_error "** (EXIT from #{inspect pid}) #{inspect(reason)}"
   end
 
