@@ -59,11 +59,11 @@ defmodule IEx.Debugger.Shell do
     end
   end
 
-  defp compile_do(code, config, fun) do
-    list_code = String.to_char_list!(code)
-    case :elixir_translator.forms(list_code, 0, "dbg", []) do
+  defp compile_do(latest_input, config, fun) do
+    code = config.cache ++ String.to_char_list!(latest_input)
+    case :elixir_translator.forms(code, config.counter, "dbg", []) do
       { :ok, [forms] } ->
-        config = fun.(forms)
+        fun.(forms)
       { :error, { line, error, token } } ->
         if token == [] do
           config.cache(code)
@@ -74,12 +74,17 @@ defmodule IEx.Debugger.Shell do
             kind, error ->
               Evaluator.print_error(kind, error, System.stacktrace)
           end
+          config
         end
     end
   end
 
-  defp helpers_scope(scope) do
-    scope = :elixir.scope_for_eval(scope, delegate_locals_to: IEx.Debugger.Helpers)
+  defp pid_to_string(pid) do
+    iolist_to_binary(:erlang.pid_to_list(pid))
+  end
+
+  defp dbg_scope(scope) do
+    scope = :elixir.scope_for_eval(scope, file: "dbg", delegate_locals_to: IEx.Debugger.Helpers)
     { _, _, scope } = :elixir.eval('require IEx.Debugger.Helpers', [], 0, scope)
     scope
   end
@@ -91,17 +96,21 @@ defmodule IEx.Debugger.Shell do
         #       it would be better if they were evaluated in the same process.
         config = compile_do code, config, fn(forms) -> 
           pid = spawn fn ->
-            PIDTable.start(self, config.binding, helpers_scope(config.scope))
+            PIDTable.start(self, config.binding, dbg_scope(config.scope))
+
             case Runner.next(forms) do
               { :ok, result } ->
-                IO.puts "(#{inspect config.counter})#{inspect self} => #{inspect result}"
+                str = "(#{inspect config.counter})#{pid_to_string self} => #{inspect result}"
+                IO.puts :stdio, IEx.color(:eval_result, str)
               { :exception, kind, reason, stacktrace } ->
                 Evaluator.print_error(kind, reason, stacktrace)
             end
             PIDTable.finish(self)
           end
 
-          IO.puts "(#{inspect config.counter})#{inspect pid}"
+          info = "(#{inspect config.counter})#{pid_to_string pid}"
+          IO.puts :stdio, IEx.color(:eval_info, info)
+
           config.update_counter(&(&1+1)).cache('').result(nil)
         end
 

@@ -81,7 +81,7 @@ defmodule IEx.Debugger.Helpers do
   Runs again a process stuck at a breakpoint
   """
   def dr(pid_str) do
-    pid = pid_str |> to_char_list
+    pid = pid_str |> String.to_char_list!
                   |> :erlang.list_to_pid
     Controller.run(pid)
   end

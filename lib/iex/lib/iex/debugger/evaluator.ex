@@ -46,6 +46,8 @@ defmodule IEx.Debugger.Evaluator do
         { :unsafe, _ } ->
           { value, binding, scope } = :elixir.eval_quoted([expr], state.binding, line, mod_scope)
       end
+
+      # some data is lost on scope conversion, such as module and file
       new_scope = scope 
                   |> set_elem(15, module) # local
                   |> set_elem(19, file)

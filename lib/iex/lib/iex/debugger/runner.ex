@@ -334,7 +334,7 @@ defmodule IEx.Debugger.Runner do
   # wrap_next_clause/1 prepares an expression to call next/1
   # inside an :elixir.eval call. This is used on case clauses and
   # anonymous functions
-  def wrap_next_clause(expr) do
+  def wrap_next_clause(expr, source // nil) do
     esc_expr = Macro.escape expr
 
     quote do
@@ -350,6 +350,9 @@ defmodule IEx.Debugger.Runner do
           scope   = :elixir_scope.vars_from_binding(state.scope, binding)
       end
       
+      source = unquote(source)
+      unless nil?(source), do: scope = set_elem(scope, 18, source)
+
       PIDTable.start(self, binding, scope)
       return = Runner.next(unquote(esc_expr))
       PIDTable.finish(self)
