@@ -103,6 +103,13 @@ defmodule IEx.Debugger.Helpers do
     dont_display_result
   end
 
+  @doc """
+  Shells inside a process
+  """
+  def ds(pid, expr) do
+    Controller.eval(pid, expr)
+  end
+
   ## NOTICE
   ## Everything down from here is copied from IEx.Helpers
   ##
@@ -147,17 +154,6 @@ defmodule IEx.Debugger.Helpers do
     IO.write [IO.ANSI.home, IO.ANSI.clear]
     dont_display_result
   end
-
-  @doc """
-  Starts the debugger shell.
-  """
-  def dbg do
-    timeout = 1000
-    message = "Debug shell starting"
-    opts = [dot_iex_path: "", prefix: "dbg"]
-    spawn fn -> IEx.Debugger.Shell.take_over(message, opts, timeout) end
-  end
-
 
   @doc """
   Prints the list of all loaded modules with paths to

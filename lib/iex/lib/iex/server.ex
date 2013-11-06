@@ -155,7 +155,7 @@ defmodule IEx.Server do
       # Message either go back to the main loop or exit.
       { :evaled, ^evaluator, config } ->
         loop(config, evaluator, evaluator_ref)
-
+        
       { :input, ^input, code } when is_binary(code) ->
         send evaluator, { :eval, self, code, config }
         wait_eval(evaluator, evaluator_ref)
@@ -166,7 +166,7 @@ defmodule IEx.Server do
         exit_loop(evaluator, evaluator_ref)
       { :input, ^input, { :error, :terminated } } ->
         exit_loop(evaluator, evaluator_ref)
-
+      
       # Take process.
       # The take? message is received out of band, so we can
       # go back to wait for the same input. The take message
