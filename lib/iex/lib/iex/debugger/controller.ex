@@ -68,10 +68,7 @@ defmodule IEx.Debugger.Controller do
   
   def handle_call(:list, _sender, data) do
     pid_status = Enum.map PIDTable.get_all, fn({ pid, { companion, _count }}) ->
-      status = case Companion.active_breakpoints(companion) do
-        [] -> "running (#{inspect Companion.expr(companion)}"
-        other -> inspect(Enum.first(other)) # { file, line } string
-      end
+      status = Companion.process_status(companion)
       { pid, status }
     end
 

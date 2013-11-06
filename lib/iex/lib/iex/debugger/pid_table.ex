@@ -31,6 +31,7 @@ defmodule IEx.Debugger.PIDTable do
   end
 
   def handle_call(:get_all, _sender, dict) do
+    IO.inspect dict
     { :reply, dict, dict }
   end
 

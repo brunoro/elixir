@@ -46,9 +46,29 @@ defmodule IEx.Debugger.Companion do
     { :reply, data.active_breakpoints, data}
   end
 
+  def handle_call(:process_status, _sender, data) do
+    file = elem(data.state.scope, 18) 
+    line = case data.expr do
+      { _, meta, _ } -> meta[:line]
+      _no_meta       -> nil
+    end
+
+    # TODO: get expr from the file
+    expr = data.expr
+
+    # TODO: should we add a `running` field to Companion.Data?
+    status = case data.active_breakpoints do
+      [] -> 
+        { :paused, file, line, expr, data.active_breakpoints }
+      other ->
+        { :running, file, line, expr }
+    end
+    { :reply, status, data}
+  end
+
   def handle_call({ :next, expr }, { pid, _ref }, data) do
     # breakpoints
-    active = case expr do
+    active_breakpoints = case expr do
       { _, meta, _ } ->
         env_file = elem(data.state.scope, 18) # see IEx.Debugger.Evaluator
         Enum.filter data.breakpoints, fn({ file, line }) ->
@@ -59,7 +79,7 @@ defmodule IEx.Debugger.Companion do
     end
 
     # breakpoints have priority over shell_next
-    response = if Enum.empty?(active) do
+    response = if Enum.empty?(active_breakpoints) do
       if (data.shell_next) do
         Controller.shell_next(false)
         IO.puts "shell_next at #{inspect pid}"
@@ -68,11 +88,11 @@ defmodule IEx.Debugger.Companion do
         :go
       end
     else
-      IO.puts "hit breakpoint at #{inspect pid}: #{inspect active}"
+      IO.puts "hit breakpoint at #{inspect pid}: #{inspect active_breakpoints}"
       :wait
     end
 
-    { :reply, response, data.active_breakpoints(active).expr(expr) }
+    { :reply, response, data.active_breakpoints(active_breakpoints).expr(expr) }
   end
 
   ## handle_cast
@@ -115,6 +135,7 @@ defmodule IEx.Debugger.Companion do
   def breakpoints(pid),        do: :gen_server.call(pid, :breakpoints)
   def breakpoints(pid, bp),    do: :gen_server.cast(pid, { :breakpoints, bp })
   def active_breakpoints(pid), do: :gen_server.call(pid, :active_breakpoints)
+  def process_status(pid),     do: :gen_server.call(pid, :process_status)
 
   # client functions
   def done(pid),             do: :gen_server.cast(pid, :done)
