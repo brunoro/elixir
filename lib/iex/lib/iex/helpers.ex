@@ -105,7 +105,15 @@ defmodule IEx.Helpers do
     timeout = 1000
     message = "Debug shell starting"
     opts = [dot_iex_path: "", prefix: "dbg"]
-    spawn fn -> IEx.Debugger.Shell.take_over(message, opts, timeout) end
+
+    host = self
+    spawn fn -> 
+      IEx.Debugger.Shell.take_over(message, opts, timeout) 
+      host <- :ok
+    end
+    receive do 
+      ack -> ack 
+    end
   end
 
 

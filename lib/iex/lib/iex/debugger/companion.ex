@@ -48,21 +48,27 @@ defmodule IEx.Debugger.Companion do
 
   def handle_call({ :next, expr }, { pid, _ref }, data) do
     # breakpoints
-    active = Enum.filter data.breakpoints, fn({ file, line }) ->
-      { _, meta, _ } = expr
-      env_file = elem(data.state.scope, 18) # see comment on IEx.Debugger.Evaluator
-      (meta[:line] == line) and (env_file == file)
+    active = case expr do
+      { _, meta, _ } ->
+        env_file = elem(data.state.scope, 18) # see IEx.Debugger.Evaluator
+        Enum.filter data.breakpoints, fn({ file, line }) ->
+          (meta[:line] == line) and (env_file == file)
+        end
+      _other ->
+        []
     end
 
+    # breakpoints have priority over shell_next
     response = if Enum.empty?(active) do
-      # breakpoints have priority over shell_next
       if (data.shell_next) do
         Controller.shell_next(false)
-        Shell.event(pid)
+        IO.puts "shell_next at #{inspect pid}"
+        :wait
+      else
+        :go
       end
-      :go
     else
-      Shell.event(pid)
+      IO.puts "hit breakpoint at #{inspect pid}: #{inspect active}"
       :wait
     end
 

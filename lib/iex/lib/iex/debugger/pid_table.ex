@@ -42,7 +42,7 @@ defmodule IEx.Debugger.PIDTable do
         { :reply, nil, dict }
     end
   end
-
+  
   # before function calls
   def handle_call({ :start, pid, binding, scope }, _sender, dict) do
     entry = case dict[pid] do
@@ -58,7 +58,7 @@ defmodule IEx.Debugger.PIDTable do
         { bps, shn } = case Enum.first(dict) do
           nil ->
             { Controller.breakpoints, Controller.shell_next }
-          comp ->
+          { _pid, { comp, _ }} ->
             { Companion.breakpoints(comp), Companion.shell_next(comp) }
         end
 
