@@ -83,34 +83,50 @@ defmodule IEx.Debugger.Shell do
     iolist_to_binary(:erlang.pid_to_list(pid))
   end
 
-  defp dbg_scope(scope) do
-    scope = :elixir.scope_for_eval(scope, file: "dbg", delegate_locals_to: IEx.Debugger.Helpers)
-    { _, _, scope } = :elixir.eval('require IEx.Debugger.Helpers', [], 0, scope)
+  @helpers_module IEx.Debugger.Helpers
+
+  defp dbg_scope do
+    scope = :elixir.scope_for_eval(file: "dbg", delegate_locals_to: @helpers_module)
+    require_helpers = String.to_char_list!("require #{to_string @helpers_module}")
+    { _, _, scope } = :elixir.eval(require_helpers, [], 0, scope)
     scope
   end
+
+  # TODO: helpers may also be called using the module prefix
+  defp helper_call?({ fun, _, args }) when is_atom(fun) and is_list(args) do
+    function_exported?(@helpers_module, fun, Enum.count(args))
+  end
+  defp helper_call?(_), do: false
 
   defp loop(server) do
     receive do
       { :eval, ^server, code, config } ->
-        # TODO: how should we handle helpers? 
-        #       it would be better if they were evaluated in the same process.
         config = compile_do code, config, fn(forms) -> 
-          pid = spawn fn ->
-            PIDTable.start(self, config.binding, dbg_scope(config.scope))
+          # Helpers are evaluated serially, but scope isn't changed
+          if helper_call?(forms) do
+            config = Evaluator.eval(code, config.scope(dbg_scope))
 
-            case Runner.next(forms) do
-              { :ok, result } ->
-                str = "(#{inspect config.counter})#{pid_to_string self} => #{inspect result}"
-                IO.puts :stdio, IEx.color(:eval_result, str)
-              { :exception, kind, reason, stacktrace } ->
-                Evaluator.print_error(kind, reason, stacktrace)
+          # Every other expression should be evaluated on a separate process
+          else
+            pid = spawn fn ->
+              PIDTable.start(self, config.binding, dbg_scope)
+
+              case Runner.next(forms) do
+                { :ok, result } ->
+                  str = "(#{inspect config.counter})#{pid_to_string self} => #{inspect result}"
+                  IO.puts :stdio, IEx.color(:eval_result, str)
+
+                { :exception, kind, reason, stacktrace } ->
+                  Evaluator.print_error(kind, reason, stacktrace)
+              end
+              PIDTable.finish(self)
             end
-            PIDTable.finish(self)
+
+            IO.puts :stdio, IEx.color(:eval_info, pid_to_string(pid))
           end
 
-          info = "(#{inspect config.counter})#{pid_to_string pid}"
-          IO.puts :stdio, IEx.color(:eval_info, info)
-
+          config = config.cache(code).scope(nil).result(pid)
+          Evaluator.update_history(config)
           config.update_counter(&(&1+1)).cache('').result(nil)
         end
 
