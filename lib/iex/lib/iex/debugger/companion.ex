@@ -59,9 +59,9 @@ defmodule IEx.Debugger.Companion do
     # TODO: should we add a `running` field to Companion.Data?
     status = case data.active_breakpoints do
       [] -> 
-        { :paused, file, line, expr, data.active_breakpoints }
-      other ->
         { :running, file, line, expr }
+      other ->
+        { :paused, file, line, expr, data.active_breakpoints }
     end
     { :reply, status, data}
   end
