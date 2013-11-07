@@ -40,7 +40,6 @@ defmodule IEx.Debugger.Helpers do
   """
 
   import IEx, only: [dont_display_result: 0]
-  alias IEx.Debugger.Controller
 
   @doc """
   Compile files for debugging. Behaves the same way as `c/2`
@@ -74,7 +73,7 @@ defmodule IEx.Debugger.Helpers do
   Lists the current debugged processes
   """
   def dl do
-    Controller.list
+    IEx.Debugger.Controller.list
   end
 
   @doc """
@@ -83,7 +82,7 @@ defmodule IEx.Debugger.Helpers do
   def dr(pid_str) do
     pid = pid_str |> String.to_char_list!
                   |> :erlang.list_to_pid
-    Controller.run(pid)
+    IEx.Debugger.Controller.run(pid)
   end
 
   # TODO: this is just a copy of m/0 for now
@@ -106,8 +105,22 @@ defmodule IEx.Debugger.Helpers do
   @doc """
   Shells inside a process
   """
-  def ds(pid, expr) do
-    Controller.eval(pid, expr)
+  # TODO: how would the IEx.Server pid get here without 
+  #       some special shizzle on the dbg loop?
+  def ds(pid, server, config) do
+    if Process.alive?(pid) do
+      companion = IEx.Debugger.PIDTable.get(pid)
+
+      case IEx.Debugger.Companion.process_status(companion) do
+        { :paused, _, _, _, _ } ->
+          server <- { :evaled, self, config.prefix("dbg:#{IEx.Debugger.Shell.pid_to_string pid}") }
+          IEx.Debugger.Shell.process_shell_loop(server, pid)
+        { :running, _, _, _ } ->
+          :running
+      end
+    else
+      :noproc
+    end
   end
 
   ## NOTICE

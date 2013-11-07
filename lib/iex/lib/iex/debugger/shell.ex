@@ -79,7 +79,7 @@ defmodule IEx.Debugger.Shell do
     end
   end
 
-  defp pid_to_string(pid) do
+  def pid_to_string(pid) do
     iolist_to_binary(:erlang.pid_to_list(pid))
   end
 
@@ -96,38 +96,51 @@ defmodule IEx.Debugger.Shell do
   defp helper_call?({ fun, _, args }) when is_atom(fun) and is_list(args) do
     function_exported?(@helpers_module, fun, Enum.count(args))
   end
+  defp helper_call?({ fun, _, nil }) when is_atom(fun) do
+    function_exported?(@helpers_module, fun, 0)
+  end
   defp helper_call?(_), do: false
 
   defp loop(server) do
     receive do
       { :eval, ^server, code, config } ->
         config = compile_do code, config, fn(forms) -> 
-          # Helpers are evaluated serially, but scope isn't changed
-          if helper_call?(forms) do
-            config = Evaluator.eval(code, config.scope(dbg_scope))
+          case forms do
+            # TODO: ds helper needs the server pid as a parameter,
+            #       there should be a better way to do this.
+            { :ds, _, pid_expr } ->
+                { pid, _, _ } = :elixir.eval_forms(pid_expr, config.binding, dbg_scope)
+                result = IEx.Debugger.Helpers.ds(pid, server, config)
+                IO.puts :stdio, IEx.color(:eval_result, result)
 
-          # Every other expression should be evaluated on a separate process
-          else
-            pid = spawn fn ->
-              PIDTable.start(self, config.binding, dbg_scope)
+                config
+            _other ->
+              # Helpers are evaluated serially, but scope isn't changed
+              if helper_call?(forms) do
+                config = Evaluator.eval(code, config.scope(dbg_scope))
 
-              case Runner.next(forms) do
-                { :ok, result } ->
-                  str = "(#{inspect config.counter})#{pid_to_string self} => #{inspect result}"
-                  IO.puts :stdio, IEx.color(:eval_result, str)
+              # Every other expression should be evaluated on a separate process
+              else
+                pid = spawn fn ->
+                  PIDTable.start(self, config.binding, dbg_scope)
 
-                { :exception, kind, reason, stacktrace } ->
-                  Evaluator.print_error(kind, reason, stacktrace)
+                  case Runner.next(forms) do
+                    { :ok, result } ->
+                      str = "(#{inspect config.counter})#{pid_to_string self} => #{inspect result}"
+                      IO.puts :stdio, IEx.color(:eval_result, str)
+                    { :exception, kind, reason, stacktrace } ->
+                      Evaluator.print_error(kind, reason, stacktrace)
+                  end
+                  PIDTable.finish(self)
+                end
+
+                IO.puts :stdio, IEx.color(:eval_info, pid_to_string(pid))
+
+                config = config.cache(code).scope(nil).result(pid)
+                Evaluator.update_history(config)
+                config.update_counter(&(&1+1)).cache('').result(nil)
               end
-              PIDTable.finish(self)
-            end
-
-            IO.puts :stdio, IEx.color(:eval_info, pid_to_string(pid))
           end
-
-          config = config.cache(code).scope(nil).result(pid)
-          Evaluator.update_history(config)
-          config.update_counter(&(&1+1)).cache('').result(nil)
         end
 
         server <- { :evaled, self, config }
@@ -141,6 +154,39 @@ defmodule IEx.Debugger.Shell do
       { :EXIT, other, reason } ->
         Server.print_exit(other, reason)
         loop(server)
+    end
+  end
+
+  def process_shell_loop(server, pid) do
+    receive do
+      { :eval, ^server, '#dbg:quit\n', _config } ->
+        :ok
+
+      { :eval, ^server, code, config } ->
+        config = compile_do code, config, fn(forms) -> 
+          case Controller.eval(pid, forms) do
+            { :ok, result } ->
+              str = "(#{inspect config.counter})#{pid_to_string self} => #{inspect result}"
+              IO.puts :stdio, IEx.color(:eval_result, str)
+            { :exception, kind, reason, stacktrace } ->
+              Evaluator.print_error(kind, reason, stacktrace)
+          end
+
+          config = config.cache(code).scope(nil).result(pid)
+          Evaluator.update_history(config)
+          config.update_counter(&(&1+1)).cache('').result(nil)
+        end
+
+        server <- { :evaled, self, config }
+        process_shell_loop(server, pid)
+
+      { :done, _server } ->
+        :ok
+      { :EXIT, _other, :normal } ->
+        process_shell_loop(server, pid)
+      { :EXIT, other, reason } ->
+        Server.print_exit(other, reason)
+        process_shell_loop(server, pid)
     end
   end
 end
