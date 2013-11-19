@@ -143,7 +143,7 @@ defmodule IEx.Evaluator do
     end
   end
 
-  defp update_history(counter, cache, result) do
+  def update_history(counter, cache, result) do
     IEx.History.append({ counter, cache, result }, counter, IEx.Options.get(:history_size))
   end
 

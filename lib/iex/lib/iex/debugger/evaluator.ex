@@ -1,6 +1,8 @@
 defmodule IEx.Debugger.Evaluator do
   import IEx.Debugger.Escape
 
+  # TODO: this seems to be wrong; for what it's worth 
+  #       it would be nice to encapsulate those elem/2 and set_elem/3 calls.
   # Elixir scope -- Erlang record: 
   # 0   :elixir_scope,
   # 1   context=nil,             %% can be assign, guards or nil
@@ -29,7 +31,7 @@ defmodule IEx.Debugger.Evaluator do
   # 24  functions                %% a list with functions imported from module
   def eval_quoted(expr, state) do
     module    = elem(state.scope, 6)
-    file      = elem(state.scope, 19)
+    file      = elem(state.scope, 20)
     mod_scope = set_elem(state.scope, 15, module) # delegate_locals_to
 
     { _, meta, _ } = expr
@@ -49,8 +51,9 @@ defmodule IEx.Debugger.Evaluator do
 
       # some data is lost on scope conversion, such as module and file
       new_scope = scope 
+                  |> set_elem(6, module) # local
                   |> set_elem(15, module) # local
-                  |> set_elem(19, file)
+                  |> set_elem(20, file)
 
       { :ok, value, state.binding(binding).scope(new_scope) }
     catch
@@ -59,13 +62,20 @@ defmodule IEx.Debugger.Evaluator do
     end
   end
 
+  def update_binding(scope, binding) do
+    module = elem(scope, 6)
+    { _mod, new_scope } = :elixir_scope.load_binding(binding, scope, module)
+    new_scope
+  end
+
   # add functions and pids to binding with some name mangling
   def escape_and_bind(thing, state) when is_escapable(thing) do 
-    var = thing |> escape |> binary_to_atom
-    new_binding = Keyword.put(state.binding, var, thing)
-    new_scope = :elixir_scope.vars_from_binding(state.scope, new_binding)
+    var     = thing |> escape |> binary_to_atom
+    binding = Keyword.put(state.binding, var, thing)
+    scope   = update_binding(state.scope, binding)
 
-    {{ var, [], nil }, state.binding(new_binding).scope(new_scope) }
+    new_state = state.binding(binding).scope(scope)
+    {{ var, [], nil }, new_state }
   end
   # star trek: deep escape 9
   def escape_and_bind(list, state) when is_list(list) do

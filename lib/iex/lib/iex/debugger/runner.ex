@@ -63,11 +63,11 @@ defmodule IEx.Debugger.Runner do
 
   # expand expr and run fun/0 
   defp do_or_expand(expr, fun) do 
-    { name, _, args } = expr 
-    arity = if args, do: Enum.count(args), else: 0
-        
     { :ok, expanded } = with_state &Evaluator.expand(expr, &1)
 
+    #{ name, _, args } = expr 
+    #arity = if is_list(args), do: Enum.count(args), else: 0
+        
     cond do
       # TODO: this should work for the &fn macro
       #{ name, arity } in kernel_macros ->
@@ -179,10 +179,10 @@ defmodule IEx.Debugger.Runner do
   end
 
   # anonymous functions
-  def do_next(expr={ :fn, meta, [[do: body]] }) do
+  def do_next(expr={ :fn, meta, [body] }) do
     authorize(expr)
     next_body = wrap_next_arrow(body)
-    { :ok, { :fn, meta, [[do: next_body]] }}
+    { :ok, { :fn, meta, [next_body] }}
   end
 
   # case
@@ -395,10 +395,10 @@ defmodule IEx.Debugger.Runner do
         companion ->
           state   = Companion.get_state(companion)
           binding = Keyword.merge(state.binding, Kernel.binding)
-          scope   = :elixir_scope.vars_from_binding(state.scope, binding)
+          scope   = Evaluator.update_binding(state.scope, binding)
       end
       
-      scope = set_elem(scope, 18, __FILE__)
+      scope = set_elem(scope, 20, __FILE__)
 
       PIDTable.start(self, binding, scope)
       return = Runner.next(unquote(esc_expr))

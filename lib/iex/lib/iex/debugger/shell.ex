@@ -121,12 +121,13 @@ defmodule IEx.Debugger.Shell do
 
               # Every other expression should be evaluated on a separate process
               else
+                line = config.counter
                 pid = spawn fn ->
                   PIDTable.start(self, config.binding, dbg_scope)
 
                   case Runner.next(forms) do
                     { :ok, result } ->
-                      str = "(#{inspect config.counter})#{pid_to_string self} => #{inspect result}"
+                      str = "(#{inspect line})#{pid_to_string self} => #{inspect result}"
                       IO.puts :stdio, IEx.color(:eval_result, str)
                     { :exception, kind, reason, stacktrace } ->
                       Evaluator.print_error(kind, reason, stacktrace)
@@ -136,9 +137,8 @@ defmodule IEx.Debugger.Shell do
 
                 IO.puts :stdio, IEx.color(:eval_info, pid_to_string(pid))
 
-                config = config.cache(code).scope(nil).result(pid)
-                Evaluator.update_history(config)
-                config.update_counter(&(&1+1)).cache('').result(nil)
+                Evaluator.update_history(line, code, pid)
+                config.update_counter(&(&1+1)).cache('')
               end
           end
         end
@@ -172,9 +172,8 @@ defmodule IEx.Debugger.Shell do
               Evaluator.print_error(kind, reason, stacktrace)
           end
 
-          config = config.cache(code).scope(nil).result(pid)
-          Evaluator.update_history(config)
-          config.update_counter(&(&1+1)).cache('').result(nil)
+          Evaluator.update_history(config.counter, code, result)
+          config.update_counter(&(&1+1)).cache('')
         end
 
         server <- { :evaled, self, config }
