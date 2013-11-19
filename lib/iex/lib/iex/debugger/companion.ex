@@ -4,6 +4,7 @@ defmodule IEx.Debugger.Companion do
   use GenServer.Behaviour
 
   alias IEx.Debugger.Controller
+  alias IEx.Debugger.Evaluator
   alias IEx.Debugger.State
 
   defrecord Data, [state: State[], 
@@ -19,10 +20,7 @@ defmodule IEx.Debugger.Companion do
 
   # gen_server methods
   def init(data) do
-    state = data.state
-    scope = :elixir_scope.vars_from_binding(state.scope, state.binding)
-    new_state = state.scope(scope)
-    { :ok, data.state(new_state) }
+    { :ok, data }
   end
     
   ## handle_call
