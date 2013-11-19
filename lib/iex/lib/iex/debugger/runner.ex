@@ -51,6 +51,7 @@ defmodule IEx.Debugger.Runner do
     result
   end
 
+  """
   defp kernel_macros do
     companion = PIDTable.get(self)
     state = Companion.get_state(companion)
@@ -58,6 +59,7 @@ defmodule IEx.Debugger.Runner do
     # TODO: check this
     elem(state.scope, 22)[Kernel] || [] 
   end
+  """
 
   # expand expr and run fun/0 
   defp do_or_expand(expr, fun) do 
@@ -67,9 +69,9 @@ defmodule IEx.Debugger.Runner do
     { :ok, expanded } = with_state &Evaluator.expand(expr, &1)
 
     cond do
-      # kernel macro, next on it
-      { name, arity } in kernel_macros ->
-        do_next(expanded)
+      # TODO: this should work for the &fn macro
+      #{ name, arity } in kernel_macros ->
+      # do_next(expanded)
       # other macro, just eval it
       expanded != expr ->
         eval_change_state(expr)
@@ -196,21 +198,22 @@ defmodule IEx.Debugger.Runner do
   # receive
   def do_next(expr={ :receive, _, [[do: clauses]] }) do
     authorize(expr)
-    { :receive, received_value } = with_state &Evaluator.do_receive(&1)
-    match_next(prepare_value(received_value), clauses) 
+    receive_next(clauses) 
   end
 
   # receive-after
+  def do_next(expr={ :receive, _, [[do: nil, after: after_clause]] }) do
+    authorize(expr)
+    {:->, _, [{ [after_time], _, after_expr }]} = after_clause
+
+    receive_next(after_time, after_expr) 
+  end
+
   def do_next(expr={ :receive, _, [[do: do_clauses, after: after_clause]] }) do
     authorize(expr)
     {:->, _, [{ [after_time], _, after_expr }]} = after_clause
 
-    case with_state &Evaluator.do_receive(&1, after_time) do
-      { :receive, received_value } ->
-        match_next(prepare_value(received_value), do_clauses) 
-      { :after, _ } ->
-        next(after_expr) 
-    end
+    receive_next(do_clauses, after_time, after_expr) 
   end
 
   # try
@@ -299,6 +302,51 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
+  # receive block
+  def receive_next(clauses) do
+    matching_clause = change_state fn(state) ->
+      Evaluator.find_receive_clause(clauses, state)
+    end
+    
+    if_status :ok, matching_clause, fn({ _, _, right }) ->
+      result = next(right)
+
+      change_state fn(state) ->
+        Evaluator.initialize_clause_vars(clauses, state)
+      end
+
+      result
+    end
+  end
+
+  # receive / after block with no receive clauses
+  def receive_next(after_time, after_clause) do
+    matching_clause = change_state fn(state) ->
+      Evaluator.find_receive_clause(after_time, after_clause, state)
+    end
+    
+    if_status :ok, matching_clause, fn({ _, _, right }) ->
+      next(right)
+    end
+  end
+
+  # receive / after block
+  def receive_next(clauses, after_time, after_clause) do
+    matching_clause = change_state fn(state) ->
+      Evaluator.find_receive_clause(clauses, after_time, after_clause, state)
+    end
+    
+    if_status :ok, matching_clause, fn({ _, _, right }) ->
+      result = next(right)
+
+      change_state fn(state) ->
+        Evaluator.initialize_clause_vars(clauses, state)
+      end
+
+      result
+    end
+  end
+
   def exception_next(exception, rescue_block, catch_block) do
     { :exception, kind, reason, stacktrace } = exception
     esc_stacktrace = Macro.escape stacktrace
@@ -334,7 +382,7 @@ defmodule IEx.Debugger.Runner do
   # wrap_next_clause/1 prepares an expression to call next/1
   # inside an :elixir.eval call. This is used on case clauses and
   # anonymous functions
-  def wrap_next_clause(expr, source // nil) do
+  def wrap_next_clause(expr) do
     esc_expr = Macro.escape expr
 
     quote do
@@ -350,8 +398,7 @@ defmodule IEx.Debugger.Runner do
           scope   = :elixir_scope.vars_from_binding(state.scope, binding)
       end
       
-      source = unquote(source)
-      unless nil?(source), do: scope = set_elem(scope, 18, source)
+      scope = set_elem(scope, 18, __FILE__)
 
       PIDTable.start(self, binding, scope)
       return = Runner.next(unquote(esc_expr))
@@ -359,7 +406,6 @@ defmodule IEx.Debugger.Runner do
 
       case return do
           { :ok, value } ->
-            # unescape here
             value
           { :exception, kind, reason, stacktrace } ->
             :erlang.raise(kind, reason, stacktrace)

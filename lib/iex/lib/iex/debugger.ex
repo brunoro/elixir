@@ -9,8 +9,7 @@ defmodule IEx.Debugger do
 
   # for testing purposes
   defmacro defdebug(header, do: body) do
-    source = __FILE__
-    wrapped_body = Runner.wrap_next_clause(body, source)
+    wrapped_body = Runner.wrap_next_clause(body)
     quote do
       def unquote(header) do
         IEx.Debugger.PIDTable.start_link
@@ -21,7 +20,7 @@ defmodule IEx.Debugger do
   end
   defmacro defdebugmodule(name, do: contents) do
     source = __FILE__
-    wrapped_contents = wrap_quoted(contents, source)
+    wrapped_contents = wrap_quoted(contents)
     quote do
       defmodule unquote(name) do 
         unquote(wrapped_contents)
@@ -46,43 +45,43 @@ defmodule IEx.Debugger do
       |> Enum.reverse
       |> iolist_to_binary 
       |> string_to_quoted!(source)
-      |> wrap_quoted(source)
+      |> wrap_quoted
       |> List.wrap
       |> :elixir_compiler.quoted_to_path(source, path)
     end
   end
 
-  def wrap_quoted({ :defmodule, meta, right }, source) do
+  def wrap_quoted({ :defmodule, meta, right }) do
     wrap_do = Enum.map right, fn
       list when is_list(list) ->
         case Keyword.get(list, :do) do
           nil ->
             list
           do_block ->
-            Keyword.put(list, :do, wrap_quoted(do_block, source))
+            Keyword.put(list, :do, wrap_quoted(do_block))
         end
       expr -> 
-        wrap_quoted(expr, source)
+        wrap_quoted(expr)
     end
     { :defmodule, meta, wrap_do }
   end
-  def wrap_quoted({ :def, meta, right }, source) do
+  def wrap_quoted({ :def, meta, right }) do
     [header, [do: body]] = right
-    { :def, meta, [header, [do: Runner.wrap_next_clause(body, source)]] }
+    { :def, meta, [header, [do: Runner.wrap_next_clause(body)]] }
   end
   # TODO: check calling context for private functions
-  def wrap_quoted({ :defp, meta, right }, source) do
+  def wrap_quoted({ :defp, meta, right }) do
     [header, [do: body]] = right
-    { :def, meta, [header, [do: Runner.wrap_next_clause(body, source)]] }
+    { :def, meta, [header, [do: Runner.wrap_next_clause(body)]] }
   end
-  def wrap_quoted({ left, meta, right }, source) when is_list(right) do
-    { left, meta, Enum.map(right, &wrap_quoted(&1, source)) }
+  def wrap_quoted({ left, meta, right }) when is_list(right) do
+    { left, meta, Enum.map(right, &wrap_quoted(&1)) }
   end
-  def wrap_quoted(expr_list, source) when is_list(expr_list) do
-    Enum.map(expr_list, &wrap_quoted(&1, source))
+  def wrap_quoted(expr_list) when is_list(expr_list) do
+    Enum.map(expr_list, &wrap_quoted(&1))
   end
-  def wrap_quoted({ left, meta, right }, source) do
-    { left, meta, wrap_quoted(right, source) }
+  def wrap_quoted({ left, meta, right }) do
+    { left, meta, wrap_quoted(right) }
   end
-  def wrap_quoted(expr, _source), do: expr
+  def wrap_quoted(expr), do: expr
 end

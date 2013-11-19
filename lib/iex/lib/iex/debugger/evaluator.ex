@@ -95,29 +95,6 @@ defmodule IEx.Debugger.Evaluator do
     { :ok, Macro.expand_once(expr, ex_scope) }
   end
 
-  def do_receive(state) do
-    receive_code = quote do
-      receive do
-        value -> { :receive, value }
-      end
-    end
-    
-    { :ok, { status, value }, new_state } = escape_and_eval(receive_code, state)
-    { status, value, new_state }
-  end
-  def do_receive(state, after_time) do
-    receive_code = quote do
-      receive do
-        value -> { :receive, value }
-      after
-        unquote(after_time) -> { :after, nil }
-      end
-    end
-    
-    { :ok, { status, value }, new_state } = escape_and_eval(receive_code, state)
-    { status, value, new_state }
-  end
-
   # generates `unquote(lhs) -> unquote(Macro.escape clause)`
   def find_match_clause(value, clauses, state) do 
     clause_list = escape_clauses(clauses)
@@ -125,6 +102,48 @@ defmodule IEx.Debugger.Evaluator do
     match_clause_case = quote do
       case unquote(value) do
         unquote(clause_list)
+      end
+    end
+
+    escape_and_eval(match_clause_case, state)
+  end
+
+  def find_receive_clause(clauses, state) do 
+    clause_list = escape_clauses(clauses)
+
+    match_clause_case = quote do
+      receive do
+        unquote(clause_list)
+      end
+    end
+
+    escape_and_eval(match_clause_case, state)
+  end
+
+  def find_receive_clause(after_time, after_clause, state) do 
+    after_esc = Macro.escape(after_clause)
+
+    match_clause_case = quote do
+      receive do
+      after
+        unquote(after_time) ->
+          { :after, [], unquote(after_esc) }
+      end
+    end
+
+    escape_and_eval(match_clause_case, state)
+  end
+
+  def find_receive_clause(clauses, after_time, after_clause, state) do 
+    clause_list = escape_clauses(clauses)
+    after_esc = Macro.escape(after_clause)
+
+    match_clause_case = quote do
+      receive do
+        unquote(clause_list)
+      after
+        unquote(after_time) ->
+          { :after, [], unquote(after_esc) }
       end
     end
 
