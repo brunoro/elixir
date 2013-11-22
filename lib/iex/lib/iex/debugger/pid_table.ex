@@ -55,14 +55,14 @@ defmodule IEx.Debugger.PIDTable do
         { companion, count + 1 }
       nil ->
         # fetch info from any other Companion or from the Controller
-        { bps, shn } = case Enum.first(dict) do
+        bps = case Enum.first(dict) do
           nil ->
-            { Controller.breakpoints, Controller.shell_next }
+            Controller.breakpoints
           { _pid, { comp, _ }} ->
-            { Companion.breakpoints(comp), Companion.shell_next(comp) }
+            Companion.breakpoints(comp)
         end
 
-        { :ok, companion } = Companion.start_link(binding, scope, bps, shn)
+        { :ok, companion } = Companion.start_link(binding, scope, bps)
         { companion, 0 }
     end
 

@@ -1,5 +1,4 @@
 defmodule IEx.Debugger.Supervisor do
-  alias IEx.Debugger.PIDTable
   use Supervisor.Behaviour
 
   def start_link(opts) do

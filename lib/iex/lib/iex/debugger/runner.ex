@@ -3,7 +3,6 @@ defmodule IEx.Debugger.Runner do
   alias IEx.Debugger.Evaluator
   alias IEx.Debugger.PIDTable
   alias IEx.Debugger.Runner
-  alias IEx.Debugger.Controller
 
   # functions manipulating state coming from Companion
   defp change_state(fun) do

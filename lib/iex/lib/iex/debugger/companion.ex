@@ -2,19 +2,16 @@ defrecord IEx.Debugger.State, [binding: nil, scope: nil, stack: []]
 
 defmodule IEx.Debugger.Companion do
   use GenServer.Behaviour
-
-  alias IEx.Debugger.Controller
-  alias IEx.Debugger.Evaluator
   alias IEx.Debugger.State
 
   defrecord Data, [state: State[], 
                    breakpoints: [], active_breakpoints: [], 
-                   shell_next: false, expr: nil]
+                   pause_next: false, expr: nil]
 
   # public interface
-  def start_link(binding, scope, breakpoints // [], shell_next // false) do
+  def start_link(binding, scope, breakpoints // []) do
     state = State[binding: binding, scope: scope]
-    data = Data[state: state, breakpoints: breakpoints, shell_next: shell_next]
+    data = Data[state: state, breakpoints: breakpoints]
     :gen_server.start_link(__MODULE__, data, [])
   end
 
@@ -32,10 +29,6 @@ defmodule IEx.Debugger.Companion do
     { :reply, data.breakpoints, data}
   end
   
-  def handle_call(:shell_next, _sender, data) do
-    { :reply, data.shell_next, data}
-  end
-
   def handle_call(:expr, _sender, data) do
     { :reply, data.expr, data}
   end
@@ -56,12 +49,10 @@ defmodule IEx.Debugger.Companion do
 
     # TODO: should we add a `running` field to Companion.Data?
     status = case data.active_breakpoints do
-      [] -> 
-        { :running, file, line, expr }
-      other ->
-        { :paused, file, line, expr, data.active_breakpoints }
+      []     -> :running
+      _other -> :paused
     end
-    { :reply, status, data}
+    { :reply, { status, file, line, expr }, data }
   end
 
   def handle_call({ :next, expr }, { pid, _ref }, data) do
@@ -76,11 +67,10 @@ defmodule IEx.Debugger.Companion do
         []
     end
 
-    # breakpoints have priority over shell_next
+    # breakpoints have priority over pause_next
     response = if Enum.empty?(active_breakpoints) do
-      if (data.shell_next) do
-        Controller.shell_next(false)
-        IO.puts "shell_next at #{inspect pid}"
+      if (data.pause_next) do
+        IO.puts "process #{inspect pid} paused"
         :wait
       else
         :go
@@ -90,7 +80,8 @@ defmodule IEx.Debugger.Companion do
       :wait
     end
 
-    { :reply, response, data.active_breakpoints(active_breakpoints).expr(expr) }
+    data = data.pause_next(false).active_breakpoints(active_breakpoints).expr(expr)
+    { :reply, response, data }
   end
 
   ## handle_cast
@@ -122,14 +113,13 @@ defmodule IEx.Debugger.Companion do
     { :noreply, data.breakpoints(breakpoints) }
   end
   
-  def handle_cast({ :shell_next, bool }, data) do
-    { :noreply, data.shell_next(bool) }
+  def handle_cast(:pause_next, data) do
+    { :noreply, data.pause_next(true) }
   end
 
   # controller functions
   def expr(pid),               do: :gen_server.call(pid, :expr)
-  def shell_next(pid),         do: :gen_server.call(pid, :shell_next)
-  def shell_next(pid, bool),   do: :gen_server.cast(pid, { :shell_next, bool })
+  def pause_next(pid),         do: :gen_server.cast(pid, :pause_next)
   def breakpoints(pid),        do: :gen_server.call(pid, :breakpoints)
   def breakpoints(pid, bp),    do: :gen_server.cast(pid, { :breakpoints, bp })
   def active_breakpoints(pid), do: :gen_server.call(pid, :active_breakpoints)

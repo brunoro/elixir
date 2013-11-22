@@ -5,52 +5,49 @@ defmodule IEx.Debugger.Helpers do
   which provides helpers on top of Elixir's shell own helpers
   to enable debugging functionalities.
 
-  This message was triggered by invoking the helper `h/0`
-  All of the helpers available on IEx are also available here:
-
-  * `c/2`       — compiles a file at the given path
-  * `cd/1`      — changes the current directory
-  * `clear/0`   — clears the screen
-  * `dbg/0`     — starts the debugger shell
-  * `flush/0`   — flushes all messages sent to the shell
-  * `h/0`       — prints this help message
-  * `h/1`       — prints help for the given module, function or macro
-  * `l/1`       — loads the given module's beam code and purges the current version
-  * `ls/0`      — lists the contents of the current directory
-  * `ls/1`      — lists the contents of the specified directory
-  * `m/0`       — prints loaded modules
-  * `pwd/0`     — prints the current working directory
-  * `r/1`       — recompiles and reloads the given module's source file
-  * `respawn/0` — respawns the current shell
-  * `s/1`       — prints spec information
-  * `t/1`       — prints type information
-  * `v/0`       — prints the history of commands evaluated in the session
-  * `v/1`       — retrieves the nth value from the history
-  * `import_file/1`
-                — evaluates the given file in the shell's context
-
-  And some debugger-specific helpers are also available:
+  All of the helpers available on IEx are also available here,
+  the documentation for those can be listed using `h/0`.
+  Some debugger-specific helpers are available:
 
   * `db/0`  — gets debugger breakpoints 
   * `db/1`  — sets debugger breakpoints 
   * `dc/2`  — compiles a file at the given path with debugging calls
+  * `dh/0`  — prints this message
   * `dl/1`  — lists the current debugged processes
   * `ds/1`  — starts a debug shell on a given process
-  * `dr/1`  — runs again a process stuck at a breakpoint
+  * `dm/0`  — lists modules compiled for debugging
+  * `dp/1`  — pauses a process
+  * `du/1`  — unpauses a process
   """
 
   import IEx, only: [dont_display_result: 0]
+
+  @doc """
+  Wraps IEx.Helpers.c/2 to manage the debugged module list.
+  """
+  def c(files, path // ".") when is_binary(path) do
+    mods = IEx.Helpers.c(files, path)
+    debug_mods = IEx.Debugger.Controller.modules
+    del_debug_mods = Enum.reduce mods, debug_mods, fn(m, acc) ->
+      List.delete(acc, m)
+    end
+    IEx.Debugger.Controller.modules(del_debug_mods)
+    mods
+  end
 
   @doc """
   Compile files for debugging. Behaves the same way as `c/2`
   """
   def dc(files, path // ".") do
     exs = Enum.filter(List.wrap(files), &String.ends_with?(&1, [".ex", ".exs"]))
-    Enum.flat_map(exs, fn(ex) ->
+    mods = Enum.flat_map(exs, fn(ex) ->
       { :ok, modlist } = IEx.Debugger.debug_compile(ex, path)
       [modules, _binaries] = List.unzip(modlist)
       modules
     end)
+    rest_mods = IEx.Debugger.Controller.modules
+    IEx.Debugger.Controller.modules(rest_mods ++ mods)
+    mods
   end
 
   @doc """
@@ -68,38 +65,55 @@ defmodule IEx.Debugger.Helpers do
     IEx.Debugger.Controller.breakpoints(breakpoints)
     breakpoints
   end
+  def db(bp={ file, line }) when is_binary(file) and is_number(line) do
+    db([bp])
+  end
+  def db(file, line) when is_binary(file) and is_number(line) do
+    db([{ file, line }])
+  end
 
   @doc """
   Lists the current debugged processes
   """
-  def dl do
-    IEx.Debugger.Controller.list
+  def dl(opts // [pretty: true]) do
+    list = IEx.Debugger.Controller.list
+    if opts[:pretty] do
+      Enum.each list, fn { pid, { status, file, line, expr }} ->
+        sym = case status do
+          :paused  -> "■"
+          :running -> "▸"
+        end
+        IO.puts "#{inspect pid} #{inspect file}:#{line} #{sym}\n#{Macro.to_string expr}"
+      end
+      dont_display_result
+    else
+      list
+    end
   end
 
   @doc """
-  Runs again a process stuck at a breakpoint
+  Prints the documentation for `IEx.Helpers`.
   """
-  def dr(pid_str) do
-    pid = pid_str |> String.to_char_list!
-                  |> :erlang.list_to_pid
-    IEx.Debugger.Controller.run(pid)
+  def dh() do
+    # well, this line below isn't copied from IEx.Helpers
+    IEx.Introspection.h(IEx.Debugger.Helpers) 
+    dont_display_result
   end
 
-  # TODO: this is just a copy of m/0 for now
   @doc """
-  Prints the list of all loaded modules compiled for debugging
-  with paths to their corresponding `.beam` files.
+  Prints the list of all loaded modules compiled for debugging.
+  The files where those modules are defined can be fetched using
+  the `m/0` helper.
   """
   def dm do
-    all    = Enum.map :code.all_loaded, fn { mod, file } -> { inspect(mod), file } end
-    sorted = Enum.sort all
-    size   = Enum.reduce sorted, 0, fn({ mod, _ }, acc) -> max(byte_size(mod), acc) end
-    format = "~-#{size}s ~ts~n"
+    IEx.Debugger.Controller.modules
+  end
 
-    Enum.each sorted, fn({ mod, file }) ->
-      :io.format(format, [mod, file])
-    end
-    dont_display_result
+  @doc """
+  Pauses a process at the next expression
+  """
+  def dp(pid) when is_pid(pid) do
+    IEx.Debugger.Controller.pause_next(pid)
   end
 
   @doc """
@@ -123,42 +137,16 @@ defmodule IEx.Debugger.Helpers do
     end
   end
 
+  @doc """
+  Unpauses a process 
+  """
+  def du(pid) when is_pid(pid) do
+    IEx.Debugger.Controller.run(pid)
+  end
+
   ## NOTICE
   ## Everything down from here is copied from IEx.Helpers
   ##
-
-  @doc """
-  Expects a list of files to compile and a path
-  to write their object code to. It returns the name
-  of the compiled modules.
-
-  When compiling one file, there is no need to wrap it in a list.
-
-  ## Examples
-
-      c ["foo.ex", "bar.ex"], "ebin"
-      #=> [Foo,Bar]
-
-      c "baz.ex"
-      #=> [Baz]
-  """
-  def c(files, path // ".") when is_binary(path) do
-    files = List.wrap(files)
-
-    unless Enum.all?(files, &is_binary/1) do
-      raise ArgumentError, message: "expected a binary or a list of binaries as argument"
-    end
-
-    { erls, exs } = Enum.partition(files, &String.ends_with?(&1, ".erl"))
-
-    modules = Enum.map(erls, fn(source) ->
-      { module, binary } = compile_erlang(source)
-      File.write!(Path.join(path, source), binary)
-      module
-    end)
-
-    modules ++ Kernel.ParallelCompiler.files_to_path(exs, path)
-  end
 
   @doc """
   Clear the console screen.
@@ -189,7 +177,7 @@ defmodule IEx.Debugger.Helpers do
   """
   def h() do
     # well, this line below isn't copied from IEx.Helpers
-    IEx.Introspection.h(IEx.Debugger.Helpers) 
+    IEx.Introspection.h(IEx.Helpers) 
     dont_display_result
   end
 
