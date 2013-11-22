@@ -19,7 +19,6 @@ defmodule IEx.Debugger do
     end
   end
   defmacro defdebugmodule(name, do: contents) do
-    source = __FILE__
     wrapped_contents = wrap_quoted(contents)
     quote do
       defmodule unquote(name) do 

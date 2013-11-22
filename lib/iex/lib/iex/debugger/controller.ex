@@ -2,13 +2,11 @@ defmodule IEx.Debugger.Controller do
   use GenServer.Behaviour
 
   alias IEx.Debugger.Companion
-  alias IEx.Debugger.Runner
   alias IEx.Debugger.PIDTable
-  alias IEx.Debugger.Shell
 
   @server_name { :global, :controller }
 
-  defrecord Data, [breakpoints: [], shell_next: false]
+  defrecord Data, [breakpoints: [], modules: []]
 
   def alive? do
     { _reg, name } = @server_name
@@ -30,39 +28,35 @@ defmodule IEx.Debugger.Controller do
     { :ok, Data[] }
   end
 
-  def handle_cast({ :shell_next, shell_next }, data) do
-    companions = Enum.map(Dict.values(PIDTable.get_all), fn({ pid, _count}) -> pid end)
-    Enum.each(companions, &(Companion.shell_next(&1, shell_next)))
-    { :noreply, data.shell_next(shell_next) }
-  end
-
+  ## handle_cast
   def handle_cast({ :breakpoints, breakpoints }, data) do
     companions = Enum.map(Dict.values(PIDTable.get_all), fn({ pid, _count}) -> pid end)
     Enum.each(companions, &(Companion.breakpoints(&1, breakpoints)))
     { :noreply, data.breakpoints(breakpoints) }
   end
-  
-  def handle_cast({ :run, pid }, data) do
-    if at_breakpoint?(pid) do
-      pid <- :go
-    end
 
-    { :noreply, data }
+  def handle_cast({ :modules, modules }, data) do
+    { :noreply, data.modules(modules) }
   end
 
-  def handle_call(:stop, _sender, data) do
-    { :stop, :normal, :shutdown_ok, data }
+  ## handle_call
+  def handle_call({ :binding, pid }, _sender, data) do
+    companion = PIDTable.get(pid)
+    binding = if companion do Companion.get_state(companion).binding else nil end
+    { :reply, binding, data }
   end
-  
+
+  def handle_call(:breakpoints, _sender, data) do
+    { :reply, data.breakpoints, data }
+  end
+
   def handle_call({ :eval, pid, expr }, _sender, data) do
-    if at_breakpoint?(pid) do
+    if_at_breakpoint pid, fn ->
       pid <- { :eval, self, expr }
       receive do
         { ^pid, result } ->
           { :reply, result, data }
       end
-    else
-      { :reply, :running, data }
     end
   end
   
@@ -75,29 +69,58 @@ defmodule IEx.Debugger.Controller do
     { :reply, pid_status, data }
   end
   
-  def handle_call({ :binding, pid }, _sender, data) do
-    companion = PIDTable.get(pid)
-    binding = if companion do Companion.get_state(companion).binding else nil end
-    { :reply, binding, data }
-  end
-
-  def handle_call(:breakpoints, _sender, data) do
-    { :reply, data.breakpoints, data }
-  end
-
-  def handle_call(:shell_next, _sender, data) do
-    { :reply, data.shell_next, data }
+  def handle_call(:modules, _sender, data) do
+    { :reply, data.modules, data }
   end
   
+  def handle_call({ :pause_next, pid }, _sender, data) do
+    reply = cond do
+      not Process.alive?(pid) ->
+        :noproc
+      at_breakpoint?(pid) ->
+        :ok
+      true ->
+        companion = PIDTable.get(pid)
+        if companion do Companion.pause_next(companion) else :noproc end
+    end
+
+    { :reply, reply, data }
+  end
+
+  def handle_call(:stop, _sender, data) do
+    { :stop, :normal, :shutdown_ok, data }
+  end
+  
+  def handle_call({ :run, pid }, _sender, data) do
+    if_at_breakpoint pid, fn ->
+      pid <- :go
+    end
+
+    { :noreply, data }
+  end
+ 
   # interface methods
-  def run(pid),         do: :gen_server.cast(@server_name, { :run, pid })
-  def eval(pid, expr),  do: :gen_server.call(@server_name, { :eval, pid, expr })
-  def shell_next,       do: :gen_server.call(@server_name, :shell_next)
-  def shell_next(bool), do: :gen_server.cast(@server_name, { :shell_next, bool })
+  def binding(pid),     do: :gen_server.call(@server_name, { :binding, pid })
   def breakpoints,      do: :gen_server.call(@server_name, :breakpoints)
   def breakpoints(pat), do: :gen_server.cast(@server_name, { :breakpoints, pat })
+  def eval(pid, expr),  do: :gen_server.call(@server_name, { :eval, pid, expr })
   def list,             do: :gen_server.call(@server_name, :list)
-  def binding(pid),     do: :gen_server.call(@server_name, { :binding, pid })
+  def modules,          do: :gen_server.call(@server_name, :modules)
+  def modules(mod),     do: :gen_server.cast(@server_name, { :modules, mod })
+  def pause_next(pid),  do: :gen_server.call(@server_name, { :pause_next, pid })
+  def run(pid),         do: :gen_server.call(@server_name, { :run, pid })
+
+  # fun/0 if pid is at a breakpoint, otherwise :running or :norproc
+  defp if_at_breakpoint(pid, fun) do
+    cond do
+      not Process.alive?(pid) ->
+        :noproc
+      at_breakpoint?(pid) ->
+        fun.()
+      true ->
+        :running
+    end
+  end
 
   defp at_breakpoint?(pid) do
     companion = PIDTable.get(pid)

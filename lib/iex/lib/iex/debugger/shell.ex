@@ -2,7 +2,6 @@ defmodule IEx.Debugger.Shell do
   @moduledoc false
   @break_trigger '#iex:break\n'
 
-  alias IEx.Config
   alias IEx.Server
   alias IEx.Evaluator
   alias IEx.Debugger.Controller
@@ -103,6 +102,9 @@ defmodule IEx.Debugger.Shell do
 
   defp loop(server) do
     receive do
+      { :eval, ^server, "##\n", _config } ->
+        :ok
+
       { :eval, ^server, code, config } ->
         config = compile_do code, config, fn(forms) -> 
           case forms do
@@ -159,7 +161,7 @@ defmodule IEx.Debugger.Shell do
 
   def process_shell_loop(server, pid) do
     receive do
-      { :eval, ^server, '#dbg:quit\n', _config } ->
+      { :eval, ^server, "##\n", _config } ->
         :ok
 
       { :eval, ^server, code, config } ->
