@@ -125,7 +125,7 @@ defmodule IEx.Debugger.Shell do
               else
                 line = config.counter
                 pid = spawn fn ->
-                  PIDTable.start(self, config.binding, dbg_scope)
+                  PIDTable.start(config.binding, dbg_scope)
 
                   case Runner.next(forms) do
                     { :ok, result } ->
@@ -134,7 +134,7 @@ defmodule IEx.Debugger.Shell do
                     { :exception, kind, reason, stacktrace } ->
                       Evaluator.print_error(kind, reason, stacktrace)
                   end
-                  PIDTable.finish(self)
+                  PIDTable.finish
                 end
 
                 IO.puts :stdio, IEx.color(:eval_info, pid_to_string(pid))
