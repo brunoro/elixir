@@ -36,60 +36,62 @@ defmodule IEx.Debugger.PIDTable do
 
   def handle_call({ :get, pid }, _sender, dict) do
     case dict[pid] do
-      { companion, _count } ->
-        { :reply, companion, dict }
       nil ->
         { :reply, nil, dict }
+      companion ->
+        { :reply, companion, dict }
+    end
+  end
+ 
+  def handle_call(:get, { pid, _ref }, dict) do
+    case dict[pid] do
+      nil ->
+        { :reply, nil, dict }
+      companion ->
+        { :reply, companion, dict }
     end
   end
   
   # before function calls
-  def handle_call({ :start, pid, binding, scope }, _sender, dict) do
-    entry = case dict[pid] do
-      { companion, count } ->
-        # create new context
-        Companion.push_stack(companion)
-        state = Companion.get_state(companion)
-        Companion.put_state(companion, state.binding(binding).scope(scope))
-
-        { companion, count + 1 }
+  def handle_call({ :start, binding, scope }, { pid, _ref }, dict) do
+    dict = case dict[pid] do
       nil ->
         # fetch info from any other Companion or from the Controller
         bps = case Enum.first(dict) do
           nil ->
             Controller.breakpoints
-          { _pid, { comp, _ }} ->
+          { _pid, comp } ->
             Companion.breakpoints(comp)
         end
 
         { :ok, companion } = Companion.start_link(binding, scope, bps)
-        { companion, 0 }
+        Dict.put(dict, pid, companion) 
+
+      companion ->
+        Companion.push_stack(companion, binding, scope)
+        dict
     end
 
-    { :reply, companion, Dict.put(dict, pid, entry) }
+    { :reply, companion, dict }
   end
  
   # after function calls
-  def handle_cast({ :finish, pid }, dict) do
-    new_dict = case dict[pid] do
-      { companion, 0 } ->
-        Companion.done(companion)
-        Dict.delete(dict, pid)
-      { companion, count } ->
-        # exit context
-        Companion.pop_stack(companion)
-        Dict.put(dict, pid, { companion, count - 1 })
+  def handle_call(:finish, { pid, _ref }, dict) do
+    new_dict = case Companion.pop_stack(dict[pid]) do
+      :ok   -> dict
+      :done -> Dict.delete(dict, pid)
     end
 
-    { :noreply, new_dict }
+    { :reply, :ok, new_dict }
   end
 
   # controller interface
-  def get_all,                    do: :gen_server.call(@server_name, :get_all)
+  def get_all,               do: :gen_server.call(@server_name, :get_all)
+  def get(pid),              do: :gen_server.call(@server_name, { :get, pid })
 
   # client interface
-  def get(pid),                   do: :gen_server.call(@server_name, { :get, pid })
-  def start(pid, binding, scope), do: :gen_server.call(@server_name, { :start, pid, binding, scope })
-  def finish(pid),                do: :gen_server.cast(@server_name, { :finish, pid })
+  def get,                   do: :gen_server.call(@server_name, :get)
+  def start(binding, scope), do: :gen_server.call(@server_name, { :start, binding, scope })
+  def finish,                do: :gen_server.call(@server_name, :finish)
 
 end

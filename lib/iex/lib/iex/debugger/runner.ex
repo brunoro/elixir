@@ -6,7 +6,7 @@ defmodule IEx.Debugger.Runner do
 
   # functions manipulating state coming from Companion
   defp change_state(fun) do
-    companion = PIDTable.get(self)
+    companion = PIDTable.get
     state = Companion.get_state(companion)
 
     case fun.(state) do
@@ -23,7 +23,7 @@ defmodule IEx.Debugger.Runner do
   end
 
   defp with_state(fun) do
-    companion = PIDTable.get(self)
+    companion = PIDTable.get
     state = Companion.get_state(companion)
 
     case fun.(state) do
@@ -40,37 +40,23 @@ defmodule IEx.Debugger.Runner do
     with_state &Evaluator.escape_and_eval(expr, &1)
   end
 
-  # run fun on a state to be discarded
-  defp do_and_discard_state(fun) do
-    companion = PIDTable.get(self)
-    Companion.push_stack(companion)
-    result = fun.()
-    Companion.pop_stack(companion)
-
-    result
-  end
-
-  """
   defp kernel_macros do
-    companion = PIDTable.get(self)
+    companion = PIDTable.get
     state = Companion.get_state(companion)
-    # indexes for elixir_scope as on the Debugger.Evaluator comment
-    # TODO: check this
-    elem(state.scope, 22)[Kernel] || [] 
+    elem(state.scope, 23)[Kernel] || [] 
   end
-  """
 
   # expand expr and run fun/0 
   defp do_or_expand(expr, fun) do 
     { :ok, expanded } = with_state &Evaluator.expand(expr, &1)
 
-    #{ name, _, args } = expr 
-    #arity = if is_list(args), do: Enum.count(args), else: 0
+    { name, _, args } = expr 
+    arity = if is_list(args), do: Enum.count(args), else: 0
         
     cond do
-      # TODO: this should work for the &fn macro
-      #{ name, arity } in kernel_macros ->
-      # do_next(expanded)
+      # TODO: this is quite tricky
+      { name, arity } in kernel_macros ->
+        eval_change_state(expr)
       # other macro, just eval it
       expanded != expr ->
         eval_change_state(expr)
@@ -160,7 +146,7 @@ defmodule IEx.Debugger.Runner do
   end
 
   defp authorize(expr) do
-    companion = PIDTable.get(self)
+    companion = PIDTable.get
     case Companion.next(companion, expr) do
       :wait -> 
         receive_eval_or_go
@@ -264,6 +250,16 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
+  # list building operator comes wrapped in lists
+  def do_next([{ :|, _meta, expr_list }]) when is_list(expr_list) do
+    case map_next_while_ok(expr_list) do
+      { :exception, kind, reason, stacktrace } ->
+        { :exception, kind, reason, stacktrace }
+      { :ok, [head, tail]} ->
+        { :ok, [head | tail] }
+    end
+  end
+
   # lists aren't escaped like tuples
   def do_next(expr_list) when is_list(expr_list) do
     authorize(expr_list)
@@ -275,9 +271,12 @@ defmodule IEx.Debugger.Runner do
     authorize(expr_tuple)
 
     expr_list = tuple_to_list(expr_tuple)
-    # TODO: also check for exceptions here
-    { status, result } = map_next_while_ok(expr_list)
-    { status, list_to_tuple(result) }
+    case map_next_while_ok(expr_list) do
+      { :exception, kind, reason, stacktrace } ->
+        { :exception, kind, reason, stacktrace }
+      { :ok, result } ->
+        { :ok, list_to_tuple(result) }
+    end
   end
 
   # ignore everything else (atoms, binaries, numbers, etc.)
@@ -363,9 +362,7 @@ defmodule IEx.Debugger.Runner do
     try_expr = { :try, [context: IEx.Debugger.Evaluator, import: Kernel], [clauses] }
 
     if try_expr do
-      do_and_discard_state fn ->
-        eval_with_state(try_expr)
-      end
+      eval_with_state(try_expr)
     else
       exception
     end
@@ -385,23 +382,27 @@ defmodule IEx.Debugger.Runner do
     esc_expr = Macro.escape expr
 
     quote do
-      case PIDTable.get(self) do
+      case PIDTable.get do
         nil ->
-          # TODO: for some reason Kernel.binding don't contain function arguments
-          # but setting scope.vars to nil forces the the runtime to fetch them
           binding = Kernel.binding
-          scope   = :elixir_scope.to_erl_env(__ENV__.vars(nil))
+          scope   = __ENV__ 
+                    |> :elixir_scope.to_erl_env
+                    |> Evaluator.update_binding(binding)
         companion ->
           state   = Companion.get_state(companion)
           binding = Keyword.merge(state.binding, Kernel.binding)
           scope   = Evaluator.update_binding(state.scope, binding)
       end
       
-      scope = set_elem(scope, 20, __FILE__)
+      module = __ENV__.module
+      scope = scope
+              |> set_elem(20, __FILE__)
+              |> set_elem(6, module)
+              |> set_elem(14, module)
 
-      PIDTable.start(self, binding, scope)
+      PIDTable.start(binding, scope)
       return = Runner.next(unquote(esc_expr))
-      PIDTable.finish(self)
+      PIDTable.finish
 
       case return do
           { :ok, value } ->

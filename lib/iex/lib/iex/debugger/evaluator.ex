@@ -1,38 +1,19 @@
 defmodule IEx.Debugger.Evaluator do
   import IEx.Debugger.Escape
 
-  # TODO: this seems to be wrong; for what it's worth 
-  #       it would be nice to encapsulate those elem/2 and set_elem/3 calls.
-  # Elixir scope -- Erlang record: 
-  # 0   :elixir_scope,
-  # 1   context=nil,             %% can be assign, guards or nil
-  # 2   extra=nil,               %% extra information about the context, like fn_match for fns
-  # 3   noname=false,            %% when true, don't add new names (used by try)
-  # 4   super=false,             %% when true, it means super was invoked
-  # 5   caller=false,            %% when true, it means caller was invoked
-  # 6   module=nil,              %% the current module
-  # 7   function=nil,            %% the current function
-  # 8   vars=[],                 %% a dict of defined variables and their alias
-  # 9   list_vars=nil,           %% a list of vars passed down to Macro.Env
-  # 10  backup_vars=nil,         %% a copy of vars to be used on ^var
-  # 11  temp_vars=nil,           %% a set of all variables defined in a particular assign
-  # 12  clause_vars=nil,         %% a dict of all variables defined in a particular clause
-  # 13  extra_guards=nil,        %% extra guards from args expansion
-  # 14  counter=[],              %% a counter for the variables defined
-  # 15  local=nil,               %% the scope to evaluate local functions against
-  # 16  context_modules=[],      %% modules defined in the current context
-  # 17  macro_aliases=[],        %% keep aliases defined inside a macro
-  # 18  aliases,                 %% an orddict with aliases by new -> old names
-  # 19  file,                    %% the current scope filename
-  # 20  requires,                %% a set with modules required
-  # 21  macro_macros=[],         %% a list with macros imported from module inside a macro
-  # 22  macros,                  %% a list with macros imported from module
-  # 23  macro_functions=[],      %% a list with functions imported from module inside a macro
-  # 24  functions                %% a list with functions imported from module
+  def inspect_state(state, event, sep) do
+    bin = ["\n#{inspect self} #{event} ", List.duplicate(sep, 10),
+           "\n", inspect state.binding]
+    bds = Enum.map Enum.with_index(state.stack), fn({{ binding, _ }, ind }) ->
+      ["\n(", inspect(ind), ")\t", inspect(binding)]
+    end
+    IO.puts iolist_to_binary [bin | bds]
+  end
+
   def eval_quoted(expr, state) do
     module    = elem(state.scope, 6)
     file      = elem(state.scope, 20)
-    mod_scope = set_elem(state.scope, 15, module) # delegate_locals_to
+    mod_scope = set_elem(state.scope, 14, module) # delegate_locals_to
 
     { _, meta, _ } = expr
     line = meta[:line] || 0
@@ -51,8 +32,9 @@ defmodule IEx.Debugger.Evaluator do
 
       # some data is lost on scope conversion, such as module and file
       new_scope = scope 
-                  |> set_elem(6, module) # local
-                  |> set_elem(15, module) # local
+                  |> update_binding(binding)
+                  |> set_elem(6, module)
+                  |> set_elem(14, module)
                   |> set_elem(20, file)
 
       { :ok, value, state.binding(binding).scope(new_scope) }
@@ -102,7 +84,7 @@ defmodule IEx.Debugger.Evaluator do
   def expand(expr, state) do
     { _, meta, _ } = expr
     ex_scope = :elixir_scope.to_ex_env({ meta[:line] || 0, state.scope })
-    { :ok, Macro.expand_once(expr, ex_scope) }
+    { :ok, Macro.expand(expr, ex_scope) }
   end
 
   # generates `unquote(lhs) -> unquote(Macro.escape clause)`

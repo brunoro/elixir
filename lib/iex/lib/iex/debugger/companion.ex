@@ -4,7 +4,7 @@ defmodule IEx.Debugger.Companion do
   use GenServer.Behaviour
   alias IEx.Debugger.State
 
-  defrecord Data, [state: State[], 
+  defrecord Data, [state: State[],
                    breakpoints: [], active_breakpoints: [], 
                    pause_next: false, expr: nil]
 
@@ -12,6 +12,9 @@ defmodule IEx.Debugger.Companion do
   def start_link(binding, scope, breakpoints // []) do
     state = State[binding: binding, scope: scope]
     data = Data[state: state, breakpoints: breakpoints]
+
+    #inspect_state(state, "start_link", "=")
+
     :gen_server.start_link(__MODULE__, data, [])
   end
 
@@ -84,24 +87,29 @@ defmodule IEx.Debugger.Companion do
     { :reply, response, data }
   end
 
-  ## handle_cast
-  def handle_cast(:done, data) do
-    { :stop, :normal, data }
-  end
+  def handle_call(:pop_stack, from, data) do
+    #inspect_state(data.state, "pre_pop", "-")
 
-  def handle_cast(:pop_stack, data) do
-    new_state = case data.state.stack do
+    # If an empty stack is being popped, we can kill the Companion
+    case data.state.stack do
       [] ->
-        data.state
-      [{ binding, scope } | rest] ->
-        State[binding: binding, scope: scope, stack: rest]
+        :gen_server.reply(from, :done)
+        { :stop, :normal, data }
+
+      stack ->
+        [{ binding, scope } | rest] = stack
+        new_state = State[binding: binding, scope: scope, stack: rest]
+        { :reply, :ok, data.state(new_state) }
     end
-    { :noreply, data.state(new_state) }
   end
 
-  def handle_cast(:push_stack, data) do
+  ## handle_cast
+  def handle_cast({ :push_stack, binding, scope }, data) do
     state = data.state
-    new_state = state.stack([{ state.binding, state.scope } | state.stack])
+    new_state = state.binding(binding)
+                     .scope(scope)
+                     .stack([{ state.binding, state.scope } | state.stack])
+
     { :noreply, data.state(new_state) }
   end
 
@@ -118,20 +126,19 @@ defmodule IEx.Debugger.Companion do
   end
 
   # controller functions
-  def expr(pid),               do: :gen_server.call(pid, :expr)
-  def pause_next(pid),         do: :gen_server.cast(pid, :pause_next)
-  def breakpoints(pid),        do: :gen_server.call(pid, :breakpoints)
-  def breakpoints(pid, bp),    do: :gen_server.cast(pid, { :breakpoints, bp })
-  def active_breakpoints(pid), do: :gen_server.call(pid, :active_breakpoints)
-  def process_status(pid),     do: :gen_server.call(pid, :process_status)
+  def expr(pid),                       do: :gen_server.call(pid, :expr)
+  def pause_next(pid),                 do: :gen_server.cast(pid, :pause_next)
+  def breakpoints(pid),                do: :gen_server.call(pid, :breakpoints)
+  def breakpoints(pid, bp),            do: :gen_server.cast(pid, { :breakpoints, bp })
+  def active_breakpoints(pid),         do: :gen_server.call(pid, :active_breakpoints)
+  def process_status(pid),             do: :gen_server.call(pid, :process_status)
 
   # client functions
-  def done(pid),             do: :gen_server.cast(pid, :done)
-  def next(pid, expr),       do: :gen_server.call(pid, { :next, expr })
+  def next(pid, expr),                 do: :gen_server.call(pid, { :next, expr })
 
-  def get_state(pid),        do: :gen_server.call(pid, :get_state)
-  def put_state(pid, state), do: :gen_server.cast(pid, { :put_state, state })
+  def get_state(pid),                  do: :gen_server.call(pid, :get_state)
+  def put_state(pid, state),           do: :gen_server.cast(pid, { :put_state, state })
 
-  def pop_stack(pid),        do: :gen_server.cast(pid, :pop_stack)
-  def push_stack(pid),       do: :gen_server.cast(pid, :push_stack)
+  def pop_stack(pid),                  do: :gen_server.call(pid, :pop_stack)
+  def push_stack(pid, binding, scope), do: :gen_server.cast(pid, { :push_stack, binding, scope })
 end
