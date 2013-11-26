@@ -41,7 +41,7 @@ defmodule IEx.Debugger.Escape do
                                |> String.replace("/", "_")
 
 
-    "#{@fun_prefix}#{fun_name}__"
+    "#{@fun_prefix}#{fun_name}_"
   end
 
   # #Reference<0.0.0.76> -> :__REF_0_0_0_76__

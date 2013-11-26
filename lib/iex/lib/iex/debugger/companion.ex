@@ -41,7 +41,7 @@ defmodule IEx.Debugger.Companion do
   end
 
   def handle_call(:process_status, _sender, data) do
-    file = elem(data.state.scope, 18) 
+    file = elem(data.state.scope, 20)
     line = case data.expr do
       { _, meta, _ } -> meta[:line]
       _no_meta       -> nil
@@ -62,7 +62,7 @@ defmodule IEx.Debugger.Companion do
     # breakpoints
     active_breakpoints = case expr do
       { _, meta, _ } ->
-        env_file = elem(data.state.scope, 18) # see IEx.Debugger.Evaluator
+        env_file = elem(data.state.scope, 20) 
         Enum.filter data.breakpoints, fn({ file, line }) ->
           (meta[:line] == line) and (env_file == file)
         end

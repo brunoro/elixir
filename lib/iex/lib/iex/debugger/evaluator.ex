@@ -2,12 +2,14 @@ defmodule IEx.Debugger.Evaluator do
   import IEx.Debugger.Escape
 
   def inspect_state(state, event, sep) do
-    bin = ["\n#{inspect self} #{event} ", List.duplicate(sep, 10),
-           "\n", inspect state.binding]
+    bin = [sep, sep, inspect(self), 
+           " ", sep, sep, " ", event, " ",
+           List.duplicate(sep, 10),
+           "\n", inspect(state.binding)]
     bds = Enum.map Enum.with_index(state.stack), fn({{ binding, _ }, ind }) ->
       ["\n(", inspect(ind), ")\t", inspect(binding)]
     end
-    IO.puts iolist_to_binary [bin | bds]
+    IO.puts iolist_to_binary [bin, bds, "\n", List.duplicate(sep, 40), "\n"]
   end
 
   def eval_quoted(expr, state) do
@@ -40,6 +42,9 @@ defmodule IEx.Debugger.Evaluator do
       { :ok, value, state.binding(binding).scope(new_scope) }
     catch
       kind, reason -> 
+        inspect_state(state, "eval_quoted", "*")
+        IO.inspect expr
+        IO.puts Macro.to_string expr
         { :exception, kind, reason, :erlang.get_stacktrace }
     end
   end

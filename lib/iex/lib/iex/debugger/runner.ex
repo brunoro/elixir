@@ -242,7 +242,7 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
-  # other expressions are evaluated directly
+  # other triple expressions are evaluated directly
   def do_next(expr={ _left, _meta, _right }) do
     do_or_expand expr, fn ->
       authorize(expr)

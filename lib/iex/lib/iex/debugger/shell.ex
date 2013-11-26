@@ -113,7 +113,7 @@ defmodule IEx.Debugger.Shell do
             { :ds, _, pid_expr } ->
                 { pid, _, _ } = :elixir.eval_forms(pid_expr, config.binding, dbg_scope)
                 result = IEx.Debugger.Helpers.ds(pid, server, config)
-                IO.puts :stdio, IEx.color(:eval_result, result)
+                IO.puts :stdio, IEx.color(:eval_result, inspect result)
 
                 config
             _other ->

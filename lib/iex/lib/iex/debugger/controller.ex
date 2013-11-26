@@ -30,7 +30,7 @@ defmodule IEx.Debugger.Controller do
 
   ## handle_cast
   def handle_cast({ :breakpoints, breakpoints }, data) do
-    companions = Enum.map(Dict.values(PIDTable.get_all), fn({ pid, _count}) -> pid end)
+    companions = Enum.map(Dict.values(PIDTable.get_all), fn(pid) -> pid end)
     Enum.each(companions, &(Companion.breakpoints(&1, breakpoints)))
     { :noreply, data.breakpoints(breakpoints) }
   end
@@ -61,7 +61,7 @@ defmodule IEx.Debugger.Controller do
   end
   
   def handle_call(:list, _sender, data) do
-    pid_status = Enum.map PIDTable.get_all, fn({ pid, { companion, _count }}) ->
+    pid_status = Enum.map PIDTable.get_all, fn({ pid, companion }) ->
       status = Companion.process_status(companion)
       { pid, status }
     end
