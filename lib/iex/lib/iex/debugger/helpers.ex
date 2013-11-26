@@ -126,7 +126,7 @@ defmodule IEx.Debugger.Helpers do
       companion = IEx.Debugger.PIDTable.get(pid)
 
       case IEx.Debugger.Companion.process_status(companion) do
-        { :paused, _, _, _, _ } ->
+        { :paused, _, _, _, } ->
           server <- { :evaled, self, config.prefix("dbg:#{IEx.Debugger.Shell.pid_to_string pid}") }
           IEx.Debugger.Shell.process_shell_loop(server, pid)
         { :running, _, _, _ } ->
