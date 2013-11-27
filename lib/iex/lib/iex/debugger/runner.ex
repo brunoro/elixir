@@ -160,8 +160,8 @@ defmodule IEx.Debugger.Runner do
   end
 
   # anonymous functions
-  def do_next(comp, expr={ :fn, meta, [body] }) do
-    authorize(comp, expr)
+  def do_next(_comp, expr={ :fn, meta, [body] }) do
+    #authorize(comp, expr)
     next_body = wrap_next_arrow(body)
     { :ok, { :fn, meta, [next_body] }}
   end
@@ -241,7 +241,7 @@ defmodule IEx.Debugger.Runner do
   # other triple expressions are evaluated directly
   def do_next(comp, expr={ _left, _meta, _right }) do
     do_or_expand comp, expr, fn ->
-      authorize(comp, expr)
+      #authorize(comp, expr)
       eval_change_state(comp, expr)
     end
   end
