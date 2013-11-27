@@ -125,9 +125,9 @@ defmodule IEx.Debugger.Shell do
               else
                 line = config.counter
                 pid = spawn fn ->
-                  PIDTable.start(config.binding, dbg_scope)
+                  companion = PIDTable.start(config.binding, dbg_scope)
 
-                  case Runner.next(forms) do
+                  case Runner.next(companion, forms) do
                     { :ok, result } ->
                       str = "(#{inspect line})#{pid_to_string self} => #{inspect result}"
                       IO.puts :stdio, IEx.color(:eval_result, str)
