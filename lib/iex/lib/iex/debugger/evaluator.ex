@@ -42,9 +42,6 @@ defmodule IEx.Debugger.Evaluator do
       { :ok, value, state.binding(binding).scope(new_scope) }
     catch
       kind, reason -> 
-        inspect_state(state, "eval_quoted", "*")
-        IO.inspect expr
-        IO.puts Macro.to_string expr
         { :exception, kind, reason, :erlang.get_stacktrace }
     end
   end
