@@ -88,8 +88,6 @@ defmodule IEx.Debugger.Companion do
   end
 
   def handle_call(:pop_stack, from, data) do
-    #inspect_state(data.state, "pre_pop", "-")
-
     # If an empty stack is being popped, we can kill the Companion
     case data.state.stack do
       [] ->

@@ -25,11 +25,18 @@ defmodule IEx.Debugger.Evaluator do
       ex_scope = :elixir_scope.to_ex_env({ line, mod_scope })
       exp = Macro.expand(expr, ex_scope)
 
-      case Macro.safe_term(exp) do
+      { value, binding, scope } = case Macro.safe_term(exp) do
         :ok ->
-          { value, binding, scope } = { exp, state.binding, state.scope }
+          { exp, state.binding, state.scope }
+        { :unsafe, { var, _, nil }} when is_atom(var) ->
+          case state.binding[var] do
+            nil ->
+              :elixir.eval_quoted([expr], state.binding, line, mod_scope)
+            value ->
+              { value, state.binding, state.scope }
+          end
         { :unsafe, _ } ->
-          { value, binding, scope } = :elixir.eval_quoted([expr], state.binding, line, mod_scope)
+          :elixir.eval_quoted([expr], state.binding, line, mod_scope)
       end
 
       # some data is lost on scope conversion, such as module and file
