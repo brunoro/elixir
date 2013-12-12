@@ -8,7 +8,7 @@ defmodule IEx.Debugger.CompanionTest do
 
   test "put/get state" do
     binding = [a: 1]
-    scope = :elixir_scope.to_erl_env(__ENV__)
+    scope = :elixir_env.ex_to_scope(__ENV__)
     { :ok, comp } = Companion.start_link(binding, scope)
 
     state = Companion.get_state(comp)
@@ -27,7 +27,7 @@ defmodule IEx.Debugger.CompanionTest do
 
   test "push/pop state stack" do
     binding = [a: 1]
-    scope = :elixir_scope.to_erl_env(__ENV__)
+    scope = :elixir_env.ex_to_scope(__ENV__)
     { :ok, comp } = Companion.start_link(binding, scope)
 
     state = Companion.get_state(comp)
