@@ -160,7 +160,7 @@ defmodule IEx.Debugger.Runner do
   end
 
   # anonymous functions
-  def do_next(_comp, expr={ :fn, meta, [body] }) do
+  def do_next(_comp, { :fn, meta, [body] }) do
     next_body = wrap_next_arrow(body)
     { :ok, { :fn, meta, [next_body] }}
   end
@@ -380,7 +380,7 @@ defmodule IEx.Debugger.Runner do
         nil ->
           binding = Kernel.binding
           scope   = __ENV__ 
-                    |> :elixir_scope.to_erl_env
+                    |> :elixir_env.ex_to_scope
                     |> Evaluator.update_binding(binding)
         companion ->
           state   = Companion.get_state(companion)

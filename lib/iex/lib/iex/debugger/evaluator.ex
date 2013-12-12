@@ -22,7 +22,7 @@ defmodule IEx.Debugger.Evaluator do
 
     try do
       # expand it: we just want to eval code
-      ex_scope = :elixir_scope.to_ex_env({ line, mod_scope })
+      ex_scope = :elixir_env.scope_to_ex({line, mod_scope})
       exp = Macro.expand(expr, ex_scope)
 
       { value, binding, scope } = case Macro.safe_term(exp) do
@@ -55,7 +55,7 @@ defmodule IEx.Debugger.Evaluator do
 
   def update_binding(scope, binding) do
     module = elem(scope, 6)
-    { _mod, new_scope } = :elixir_scope.load_binding(binding, scope, module)
+    { _mod, new_scope } = :elixir_scope.load_binding(binding, scope)
     new_scope
   end
 
@@ -92,7 +92,7 @@ defmodule IEx.Debugger.Evaluator do
   # interface functions
   def expand(expr, state) do
     { _, meta, _ } = expr
-    ex_scope = :elixir_scope.to_ex_env({ meta[:line] || 0, state.scope })
+    ex_scope = :elixir_env.scope_to_ex({ meta[:line] || 0, state.scope })
     { :ok, Macro.expand(expr, ex_scope) }
   end
 
