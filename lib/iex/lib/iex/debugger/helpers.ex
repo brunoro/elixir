@@ -127,7 +127,7 @@ defmodule IEx.Debugger.Helpers do
 
       case IEx.Debugger.Companion.process_status(companion) do
         { :paused, _, _, _, } ->
-          server <- { :evaled, self, config.prefix("dbg:#{IEx.Debugger.Shell.pid_to_string pid}") }
+          send server, { :evaled, self, config.prefix("dbg:#{IEx.Debugger.Shell.pid_to_string pid}") }
           IEx.Debugger.Shell.process_shell_loop(server, pid)
         { :running, _, _, _ } ->
           :running
@@ -504,7 +504,7 @@ defmodule IEx.Debugger.Helpers do
   """
   def respawn do
     if whereis = IEx.Server.whereis do
-      whereis <- { :respawn, self }
+      send whereis, { :respawn, self }
       true
     else
       false

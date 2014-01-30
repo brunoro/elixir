@@ -6,13 +6,13 @@ defmodule IEx.Debugger.ReceiveTest do
 
   ## receive
   defdebug receive_f1 do
-    self <- :foo
+    send self, :foo
     receive do
       :foo -> 10
     end
   end
   defdebug receive_f2 do
-    self <- :bar
+    send self, :bar
     receive do
       :foo -> 10
       _ -> 20
@@ -30,7 +30,7 @@ defmodule IEx.Debugger.ReceiveTest do
   end
 
   defdebug vars_receive_f1 do
-    self <- :foo
+    send self, :foo
     receive do
       :foo ->
         a = 10
@@ -39,7 +39,7 @@ defmodule IEx.Debugger.ReceiveTest do
     a
   end
   defdebug vars_receive_f2 do
-    self <- :bar
+    send self, :bar
     receive do
       :foo ->
         b = 10

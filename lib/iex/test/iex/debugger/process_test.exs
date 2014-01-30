@@ -22,7 +22,7 @@ defmodule IEx.Debugger.ProcessTest do
   defdebug msg_f1 do
     this = self
     _pid = spawn fn ->
-      this <- :msg
+      send this, :msg
     end
     receive do
       :msg -> :ok
@@ -34,12 +34,12 @@ defmodule IEx.Debugger.ProcessTest do
     pid = spawn fn ->
       receive do
         { from, :msg } ->
-          from <- :ack
+          send from, :ack
       after
         200 -> :fail
       end
     end
-    pid <- { self, :msg }
+    send pid, { self, :msg }
     receive do
       :ack -> :ok
     after

@@ -22,12 +22,12 @@ defmodule IEx.Debugger.Shell do
         { :error, :self }
       true ->
         ref = make_ref()
-        server <- { :take?, self, ref }
+        send server, { :take?, self, ref }
 
         receive do
           ^ref ->
             opts = Keyword.put(opts, :evaluator, self)
-            server <- { :take, self, identifier, ref, opts }
+            send server, { :take, self, identifier, ref, opts }
 
             receive do
               { ^ref, nil } ->
@@ -145,7 +145,7 @@ defmodule IEx.Debugger.Shell do
           end
         end
 
-        server <- { :evaled, self, config }
+        send server, { :evaled, self, config }
         loop(server)
         
       { :done, ^server } ->
@@ -170,15 +170,16 @@ defmodule IEx.Debugger.Shell do
             { :ok, result } ->
               str = "(#{inspect config.counter})#{pid_to_string self} => #{inspect result}"
               IO.puts :stdio, IEx.color(:eval_result, str)
+              Evaluator.update_history(config.counter, code, result)
+
             { :exception, kind, reason, stacktrace } ->
               Evaluator.print_error(kind, reason, stacktrace)
           end
 
-          Evaluator.update_history(config.counter, code, result)
           config.update_counter(&(&1+1)).cache('')
         end
 
-        server <- { :evaled, self, config }
+        send server, { :evaled, self, config }
         process_shell_loop(server, pid)
 
       { :done, _server } ->

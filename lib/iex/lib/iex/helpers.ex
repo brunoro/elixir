@@ -109,7 +109,7 @@ defmodule IEx.Helpers do
     host = self
     spawn fn -> 
       IEx.Debugger.Shell.take_over(message, opts, timeout) 
-      host <- :ok
+      send host, :ok
     end
     receive do 
       ack -> ack 

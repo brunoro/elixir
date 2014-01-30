@@ -136,8 +136,8 @@ defmodule IEx.Debugger.Runner do
     receive do
       :go -> 
         :ok
-      { :eval, from, expr } ->
-        from <- { self, eval_change_state(comp, expr) }
+      { :eval, sender, expr } ->
+        send sender, { self, eval_change_state(comp, expr) }
         receive_eval_or_go(comp)
     end
   end
@@ -390,7 +390,7 @@ defmodule IEx.Debugger.Runner do
       
       module = __ENV__.module
       scope = scope
-              |> set_elem(20, __FILE__)
+      #|> set_elem(20, __FILE__)
               |> set_elem(6, module)
               |> set_elem(14, module)
 

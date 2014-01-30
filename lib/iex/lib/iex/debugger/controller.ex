@@ -52,7 +52,7 @@ defmodule IEx.Debugger.Controller do
 
   def handle_call({ :eval, pid, expr }, _sender, data) do
     if_at_breakpoint pid, fn ->
-      pid <- { :eval, self, expr }
+      send pid, { :eval, self, expr }
       receive do
         { ^pid, result } ->
           { :reply, result, data }
@@ -93,7 +93,7 @@ defmodule IEx.Debugger.Controller do
   
   def handle_call({ :run, pid }, _sender, data) do
     if_at_breakpoint pid, fn ->
-      pid <- :go
+      send pid, :go
     end
 
     { :noreply, data }
