@@ -58,14 +58,6 @@ defmodule IEx.Server do
           timeout ->
             { :error, :no_iex }
         end
-        :ok
-    end
-  end
-
-  def whereis_evaluator(server) do
-    case server && Process.info(server, :dictionary) do
-      { :dictionary, dict } -> dict[:evaluator]
-      _ -> nil
     end
   end
 
@@ -86,7 +78,6 @@ defmodule IEx.Server do
   @spec start(list, fun) :: :ok
   def start(opts, callback) do
     { pid, ref } = Process.spawn_monitor(callback)
-    IEx.Debugger.start [] #TODO: should the debugger be started here?
     start_loop(opts, pid, ref)
   end
 
@@ -153,9 +144,6 @@ defmodule IEx.Server do
     receive do
       # Input handling.
       # Message either go back to the main loop or exit.
-      { :evaled, ^evaluator, config } ->
-        loop(config, evaluator, evaluator_ref)
-        
       { :input, ^input, code } when is_binary(code) ->
         send evaluator, { :eval, self, code, config }
         wait_eval(evaluator, evaluator_ref)
@@ -166,7 +154,7 @@ defmodule IEx.Server do
         exit_loop(evaluator, evaluator_ref)
       { :input, ^input, { :error, :terminated } } ->
         exit_loop(evaluator, evaluator_ref)
-      
+
       # Take process.
       # The take? message is received out of band, so we can
       # go back to wait for the same input. The take message
@@ -238,18 +226,18 @@ defmodule IEx.Server do
         :elixir.env_for_eval(file: "iex", delegate_locals_to: locals)
       end
 
-    { _, _, scope } = :elixir.eval('require IEx.Helpers', [], 0, scope)
+    { _, _, env, scope } = :elixir.eval('require IEx.Helpers', [], env)
 
     binding = Keyword.get(opts, :binding, [])
     prefix  = Keyword.get(opts, :prefix, "iex")
-    config  = Config[binding: binding, scope: scope, prefix: prefix]
+    config  = Config[binding: binding, scope: scope, prefix: prefix, env: env]
 
     case opts[:dot_iex_path] do
       ""   -> config
       path -> IEx.Evaluator.load_dot_iex(config, path)
     end
   end
-  
+
   ## IO
 
   defp io_get(pid, prefix, counter) do

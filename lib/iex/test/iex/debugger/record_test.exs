@@ -61,14 +61,14 @@ defmodule IEx.Debugger.RecordTest do
   defrecord X, [a: 1, b: 2]
 
   defdebug ex_erl_env do
-    ex_env = __ENV__
-    scope  = :elixir_env.ex_to_scope(ex_env)
-    { ex_env, erl_env }
+    ex  = __ENV__
+    env = :elixir_env.ex_to_env(ex)
+    { ex, env }
   end
 
   test "passing records around" do
-    { ex, scope } = ex_erl_env
-    assert ex.module == elem(scope, 6)
+    { ex, env } = ex_erl_env
+    assert ex.module == elem(env, 1)
   end
 
   test "bracket syntax for creating records" do

@@ -13,59 +13,42 @@ defmodule IEx.Debugger.Evaluator do
   end
 
   def eval_quoted(expr, state) do
-    module    = elem(state.scope, 6)
-    file      = elem(state.scope, 20)
-    mod_scope = set_elem(state.scope, 14, module) # delegate_locals_to
-
-    { _, meta, _ } = expr
-    line = meta[:line] || 0
-
     try do
       # expand it: we just want to eval code
-      ex_scope = :elixir_env.scope_to_ex({line, mod_scope})
-      exp = Macro.expand(expr, ex_scope)
+      { :ok, exp } = expand(expr, state)
 
-      { value, binding, scope } = case Macro.safe_term(exp) do
-        :ok ->
-          { exp, state.binding, state.scope }
+      { value, binding, env, _scope } = case Macro.safe_term(exp) do
         { :unsafe, { var, _, nil }} when is_atom(var) ->
           case state.binding[var] do
             nil ->
-              :elixir.eval_quoted([expr], state.binding, line, mod_scope)
+              :elixir.eval_quoted(expr, state.binding, state.env)
             value ->
-              { value, state.binding, state.scope }
+              { value, state.binding, state.env, nil }
           end
-        { :unsafe, _ } ->
-          :elixir.eval_quoted([expr], state.binding, line, mod_scope)
+        _other ->
+          :elixir.eval_quoted(expr, state.binding, state.env)
       end
 
-      # some data is lost on scope conversion, such as module and file
-      new_scope = scope 
-                  |> update_binding(binding)
-                  |> set_elem(6, module)
-                  |> set_elem(14, module)
-                  |> set_elem(20, file)
-
-      { :ok, value, state.binding(binding).scope(new_scope) }
+      { :ok, value, state.binding(binding).env(env) }
     catch
       kind, reason -> 
         { :exception, kind, reason, :erlang.get_stacktrace }
     end
   end
 
-  def update_binding(scope, binding) do
-    module = elem(scope, 6)
-    { _mod, new_scope } = :elixir_scope.load_binding(binding, scope)
-    new_scope
+  def update_binding(env, binding) do
+    # TODO: why vars are stored as { :var, nil }?
+    # { :elixir_env, _, _, _, _, _, _, _, _, _, _, _, vars, _, _, _ } = env
+    set_elem(env, 12, binding)
   end
 
   # add functions and pids to binding with some name mangling
   def escape_and_bind(thing, state) when is_escapable(thing) do 
     var     = thing |> escape |> binary_to_atom
     binding = Keyword.put(state.binding, var, thing)
-    scope   = update_binding(state.scope, binding)
+    env     = update_binding(state.env, binding)
 
-    new_state = state.binding(binding).scope(scope)
+    new_state = state.binding(binding).env(env)
     {{ var, [], nil }, new_state }
   end
   # star trek: deep escape 9
@@ -89,11 +72,15 @@ defmodule IEx.Debugger.Evaluator do
     eval_quoted(esc_value, esc_state)
   end
 
+  def expr_line(expr) do
+    { _, meta, _ } = expr
+    meta[:line] || 0
+  end
+
   # interface functions
   def expand(expr, state) do
-    { _, meta, _ } = expr
-    ex_scope = :elixir_env.scope_to_ex({ meta[:line] || 0, state.scope })
-    { :ok, Macro.expand(expr, ex_scope) }
+    ex = :elixir_env.env_to_ex({ expr_line(expr), state.env })
+    { :ok, Macro.expand(expr, ex) }
   end
 
   # generates `unquote(lhs) -> unquote(Macro.escape clause)`
@@ -128,7 +115,7 @@ defmodule IEx.Debugger.Evaluator do
       receive do
       after
         unquote(after_time) ->
-          { :after, [], unquote(after_esc) }
+          [:__after__, unquote(after_esc)]
       end
     end
 
@@ -144,16 +131,17 @@ defmodule IEx.Debugger.Evaluator do
         unquote(clause_list)
       after
         unquote(after_time) ->
-          { :after, [], unquote(after_esc) }
+          [:__after__, unquote(after_esc)]
       end
     end
 
     escape_and_eval(match_clause_case, state)
   end
 
-  def initialize_clause_vars({ :->, _meta, clauses }, state) do
-    match_clause = { [:__initialize_clause_vars__], [], :ok }
-    all_clauses = { :->, [], [match_clause | clauses] }
+  # TODO: test this, as it seems the quoted expression for arrows changed
+  def initialize_clause_vars(clauses, state) do
+    match_clause = { :->, [], [[:__initialize_clause_vars__], :ok] }
+    all_clauses = [match_clause | clauses]
 
     match_clause_case = quote do
       case :__initialize_clause_vars__ do
@@ -164,14 +152,10 @@ defmodule IEx.Debugger.Evaluator do
     escape_and_eval(match_clause_case, state)
   end
 
-  def escape_clauses({ :->, meta, clauses }) do
-   clause_list = Enum.map clauses, fn(clause) ->
-      { left, _, _ } = clause
-      esc_clause = Macro.escape clause
+  def escape_clauses(clauses) when is_list(clauses), do: Enum.map(clauses, &escape_clause/1)
 
-      { left, [], esc_clause }
-    end
-
-    { :->, meta, clause_list }
+  defp escape_clause({ :->, meta, clause=[left, _] }) do
+    esc_clause = Macro.escape(clause)
+    { :->, meta, [left, esc_clause] }
    end
 end

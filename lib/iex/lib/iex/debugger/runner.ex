@@ -40,7 +40,8 @@ defmodule IEx.Debugger.Runner do
 
   defp kernel_macros(comp) do
     state = Companion.get_state(comp)
-    elem(state.scope, 23)[Kernel] || [] 
+    { :elixir_env, _, _, _, _, _, _, _, _, macros, _, _, _, _, _, _ } = state.env
+    macros[Kernel] || []
   end
 
   # expand expr and run fun/0 
@@ -153,16 +154,15 @@ defmodule IEx.Debugger.Runner do
 
   ## next/2
   # makes nested next calls until leafs are reached.
-  # keeps the current scope and binding
+  # keeps the current env and binding
   # returns { :ok, value } or { :exception, kind, reason, stacktrace }
   def next(comp, expr) do
     do_next(comp, expr)
   end
 
   # anonymous functions
-  def do_next(_comp, { :fn, meta, [body] }) do
-    next_body = wrap_next_arrow(body)
-    { :ok, { :fn, meta, [next_body] }}
+  def do_next(_comp, { :fn, meta, clauses }) do
+    { :ok, { :fn, meta, wrap_next_clauses(clauses) }}
   end
 
   # case
@@ -182,16 +182,17 @@ defmodule IEx.Debugger.Runner do
   end
 
   # receive-after
+  # TODO: should more than one after_clause appear?
   def do_next(comp, expr={ :receive, _, [[do: nil, after: after_clause]] }) do
     authorize(comp, expr)
-    {:->, _, [{ [after_time], _, after_expr }]} = after_clause
+    [{ :->, _, [[after_time], after_expr] }] = after_clause
 
     receive_next(comp, after_time, after_expr) 
   end
 
   def do_next(comp, expr={ :receive, _, [[do: do_clauses, after: after_clause]] }) do
     authorize(comp, expr)
-    {:->, _, [{ [after_time], _, after_expr }]} = after_clause
+    [{ :->, _, [[after_time], after_expr] }] = after_clause
 
     receive_next(comp, do_clauses, after_time, after_expr) 
   end
@@ -283,7 +284,7 @@ defmodule IEx.Debugger.Runner do
       Evaluator.find_match_clause(prepare_value(value), clauses, state)
     end
     
-    if_status :ok, matching_clause, fn({ _, _, right }) ->
+    if_status :ok, matching_clause, fn([_, right]) ->
       result = next(comp, right)
 
       change_state comp, fn(state) ->
@@ -300,7 +301,7 @@ defmodule IEx.Debugger.Runner do
       Evaluator.find_receive_clause(clauses, state)
     end
     
-    if_status :ok, matching_clause, fn({ _, _, right }) ->
+    if_status :ok, matching_clause, fn([_, right]) ->
       result = next(comp, right)
 
       change_state comp, fn(state) ->
@@ -317,7 +318,7 @@ defmodule IEx.Debugger.Runner do
       Evaluator.find_receive_clause(after_time, after_clause, state)
     end
     
-    if_status :ok, matching_clause, fn({ _, _, right }) ->
+    if_status :ok, matching_clause, fn([_, right]) ->
       next(comp, right)
     end
   end
@@ -328,7 +329,7 @@ defmodule IEx.Debugger.Runner do
       Evaluator.find_receive_clause(clauses, after_time, after_clause, state)
     end
     
-    if_status :ok, matching_clause, fn({ _, _, right }) ->
+    if_status :ok, matching_clause, fn([_, right]) ->
       result = next(comp, right)
 
       change_state comp, fn(state) ->
@@ -349,9 +350,9 @@ defmodule IEx.Debugger.Runner do
     end]
 
     if rescue_block, do: clauses = 
-      Keyword.put clauses, :rescue, wrap_next_arrow(rescue_block)
+      Keyword.put clauses, :rescue, wrap_next_clauses(rescue_block)
     if catch_block, do: clauses = 
-      Keyword.put clauses, :catch, wrap_next_arrow(catch_block)
+      Keyword.put clauses, :catch, wrap_next_clauses(catch_block)
 
     try_expr = { :try, [context: IEx.Debugger.Evaluator, import: Kernel], [clauses] }
 
@@ -362,11 +363,11 @@ defmodule IEx.Debugger.Runner do
     end
   end
 
-  def wrap_next_arrow({ :->, meta, clauses }) do
-    wrap_clauses = Enum.map clauses, fn({ left, clause_meta, right }) ->
-      { left, clause_meta, wrap_next_clause(right) }
+  def wrap_next_clauses(clauses) do
+    wrap_clauses = Enum.map clauses, fn({ :->, clause_meta, [left, right] }) ->
+      { :->, clause_meta, [left, wrap_next_clause(right)] }
     end
-    { :->, meta, wrap_clauses }
+    wrap_clauses
   end
 
   # wrap_next_clause/1 prepares an expression to call next/1
@@ -379,22 +380,14 @@ defmodule IEx.Debugger.Runner do
       case PIDTable.get do
         nil ->
           binding = Kernel.binding
-          scope   = __ENV__ 
-                    |> :elixir_env.ex_to_scope
-                    |> Evaluator.update_binding(binding)
+          env     = :elixir_env.ex_to_env(__ENV__)
         companion ->
           state   = Companion.get_state(companion)
           binding = Keyword.merge(state.binding, Kernel.binding)
-          scope   = Evaluator.update_binding(state.scope, binding)
+          env     = Evaluator.update_binding(state.env, binding)
       end
       
-      module = __ENV__.module
-      scope = scope
-      #|> set_elem(20, __FILE__)
-              |> set_elem(6, module)
-              |> set_elem(14, module)
-
-      comp = PIDTable.start(binding, scope)
+      comp   = PIDTable.start(binding, env)
       return = Runner.next(comp, unquote(esc_expr))
       PIDTable.finish
 

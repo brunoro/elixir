@@ -18,8 +18,6 @@ defmodule IEx.Debugger.Shell do
     cond do
       nil?(server) ->
         { :error, :no_iex }
-      self == Server.whereis_evaluator(server) ->
-        { :error, :self }
       true ->
         ref = make_ref()
         send server, { :take?, self, ref }
@@ -45,6 +43,8 @@ defmodule IEx.Debugger.Shell do
   end
 
   def start(server, leader) do
+    IEx.Debugger.start([])
+
     IEx.History.init
     old_leader = Process.group_leader
     old_flag   = Process.flag(:trap_exit, true)
@@ -60,8 +60,8 @@ defmodule IEx.Debugger.Shell do
 
   defp compile_do(latest_input, config, fun) do
     code = config.cache ++ String.to_char_list!(latest_input)
-    case :elixir_translator.forms(code, config.counter, "dbg", []) do
-      { :ok, [forms] } ->
+    case Code.string_to_quoted(code, [line: config.counter, file: "dbg"]) do
+      { :ok, forms } ->
         fun.(forms)
       { :error, { line, error, token } } ->
         if token == [] do
@@ -84,11 +84,11 @@ defmodule IEx.Debugger.Shell do
 
   @helpers_module IEx.Debugger.Helpers
 
-  defp dbg_scope do
-    scope = :elixir.scope_for_eval(file: "dbg", delegate_locals_to: @helpers_module)
+  defp dbg_env do
+    env = :elixir.env_for_eval(file: "dbg", delegate_locals_to: @helpers_module)
     require_helpers = String.to_char_list!("require #{to_string @helpers_module}")
-    { _, _, scope } = :elixir.eval(require_helpers, [], 0, scope)
-    scope
+    { _, _, new_env, _ } = :elixir.eval(require_helpers, [], env)
+    new_env
   end
 
   # TODO: helpers may also be called using the module prefix
@@ -111,21 +111,21 @@ defmodule IEx.Debugger.Shell do
             # TODO: ds helper needs the server pid as a parameter,
             #       there should be a better way to do this.
             { :ds, _, pid_expr } ->
-                { pid, _, _ } = :elixir.eval_forms(pid_expr, config.binding, dbg_scope)
+                { pid, _, _, _ } = :elixir.eval_forms(pid_expr, config.binding, dbg_env)
                 result = IEx.Debugger.Helpers.ds(pid, server, config)
                 IO.puts :stdio, IEx.color(:eval_result, inspect result)
 
                 config
             _other ->
-              # Helpers are evaluated serially, but scope isn't changed
+              # Helpers are evaluated serially, but env isn't changed
               if helper_call?(forms) do
-                config = Evaluator.eval(code, config.scope(dbg_scope))
+                config = Evaluator.eval(code, config.env(dbg_env))
 
               # Every other expression should be evaluated on a separate process
               else
                 line = config.counter
                 pid = spawn fn ->
-                  companion = PIDTable.start(config.binding, dbg_scope)
+                  companion = PIDTable.start(config.binding, dbg_env)
 
                   case Runner.next(companion, forms) do
                     { :ok, result } ->

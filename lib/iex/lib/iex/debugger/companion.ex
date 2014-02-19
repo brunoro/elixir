@@ -1,4 +1,4 @@
-defrecord IEx.Debugger.State, [binding: nil, scope: nil, stack: []]
+defrecord IEx.Debugger.State, [binding: nil, env: nil, stack: []]
 
 defmodule IEx.Debugger.Companion do
   use GenServer.Behaviour
@@ -9,11 +9,9 @@ defmodule IEx.Debugger.Companion do
                    pause_next: false, expr: nil]
 
   # public interface
-  def start_link(binding, scope, breakpoints // []) do
-    state = State[binding: binding, scope: scope]
+  def start_link(binding, env, breakpoints // []) do
+    state = State[binding: binding, env: env]
     data = Data[state: state, breakpoints: breakpoints]
-
-    #inspect_state(state, "start_link", "=")
 
     :gen_server.start_link(__MODULE__, data, [])
   end
@@ -41,10 +39,14 @@ defmodule IEx.Debugger.Companion do
   end
 
   def handle_call(:process_status, _sender, data) do
-    file = elem(data.state.scope, 20)
-    line = case data.expr do
-      { _, meta, _ } -> meta[:line]
-      _no_meta       -> nil
+    { :elixir_env, _, file, line, _, _, _, _, _, _, _, _, _, _, _, _ } = data.state.env
+    line = cond do
+      not nil?(line) ->
+        line
+      { _, meta, _ } = data.expr ->
+        meta[:line]
+      true ->
+        nil
     end
 
     # TODO: get expr from the file
@@ -62,9 +64,11 @@ defmodule IEx.Debugger.Companion do
     # breakpoints
     active_breakpoints = case expr do
       { _, meta, _ } ->
-        env_file = elem(data.state.scope, 20) 
-        Enum.filter data.breakpoints, fn({ file, line }) ->
-          (meta[:line] == line) and (env_file == file)
+        { :elixir_env, _, file, line, _, _, _, _, _, _, _, _, _, _, _, _ } = data.state.env
+        env_file = file
+        env_line = line || meta[:line]
+        Enum.filter data.breakpoints, fn({ bp_file, bp_line }) ->
+          (env_line == bp_line) and (env_file == bp_file)
         end
       _other ->
         []
@@ -95,18 +99,18 @@ defmodule IEx.Debugger.Companion do
         { :stop, :normal, data }
 
       stack ->
-        [{ binding, scope } | rest] = stack
-        new_state = State[binding: binding, scope: scope, stack: rest]
+        [{ binding, env } | rest] = stack
+        new_state = State[binding: binding, env: env, stack: rest]
         { :reply, :ok, data.state(new_state) }
     end
   end
 
   ## handle_cast
-  def handle_cast({ :push_stack, binding, scope }, data) do
+  def handle_cast({ :push_stack, binding, env}, data) do
     state = data.state
     new_state = state.binding(binding)
-                     .scope(scope)
-                     .stack([{ state.binding, state.scope } | state.stack])
+                     .env(env)
+                     .stack([{ state.binding, state.env} | state.stack])
 
     { :noreply, data.state(new_state) }
   end
@@ -138,5 +142,5 @@ defmodule IEx.Debugger.Companion do
   def put_state(pid, state),           do: :gen_server.cast(pid, { :put_state, state })
 
   def pop_stack(pid),                  do: :gen_server.call(pid, :pop_stack)
-  def push_stack(pid, binding, scope), do: :gen_server.cast(pid, { :push_stack, binding, scope })
+  def push_stack(pid, binding, env), do: :gen_server.cast(pid, { :push_stack, binding, env})
 end

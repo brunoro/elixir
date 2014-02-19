@@ -53,23 +53,23 @@ defmodule IEx.Debugger.PIDTable do
   end
   
   # before function calls
-  def handle_call({ :start, binding, scope }, { pid, _ref }, dict) do
-    dict = case dict[pid] do
+  def handle_call({ :start, binding, env }, { pid, _ref }, dict) do
+    { dict, companion } = case dict[pid] do
       nil ->
         # fetch info from any other Companion or from the Controller
-        bps = case Enum.first(dict) do
+        bps = case Enum.at(dict, 0) do
           nil ->
             Controller.breakpoints
           { _pid, comp } ->
             Companion.breakpoints(comp)
         end
 
-        { :ok, companion } = Companion.start_link(binding, scope, bps)
-        Dict.put(dict, pid, companion) 
+        { :ok, companion } = Companion.start_link(binding, env, bps)
+        { Dict.put(dict, pid, companion), companion }
 
       companion ->
-        Companion.push_stack(companion, binding, scope)
-        dict
+        Companion.push_stack(companion, binding, env)
+        { dict, companion }
     end
 
     { :reply, companion, dict }
@@ -90,8 +90,8 @@ defmodule IEx.Debugger.PIDTable do
   def get(pid),              do: :gen_server.call(@server_name, { :get, pid })
 
   # client interface
-  def get,                   do: :gen_server.call(@server_name, :get)
-  def start(binding, scope), do: :gen_server.call(@server_name, { :start, binding, scope })
-  def finish,                do: :gen_server.call(@server_name, :finish)
+  def get,                 do: :gen_server.call(@server_name, :get)
+  def start(binding, env), do: :gen_server.call(@server_name, { :start, binding, env })
+  def finish,              do: :gen_server.call(@server_name, :finish)
 
 end

@@ -26,7 +26,6 @@ defmodule IEx.Debugger do
       end
     end
   end
- 
 
   defp string_to_quoted!(input, source) do
     code = String.to_char_list!(input)
