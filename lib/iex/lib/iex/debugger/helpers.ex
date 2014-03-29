@@ -25,7 +25,7 @@ defmodule IEx.Debugger.Helpers do
   @doc """
   Wraps IEx.Helpers.c/2 to manage the debugged module list.
   """
-  def c(files, path // ".") when is_binary(path) do
+  def c(files, path \\ ".") when is_binary(path) do
     mods = IEx.Helpers.c(files, path)
     debug_mods = IEx.Debugger.Controller.modules
     del_debug_mods = Enum.reduce mods, debug_mods, fn(m, acc) ->
@@ -38,7 +38,7 @@ defmodule IEx.Debugger.Helpers do
   @doc """
   Compile files for debugging. Behaves the same way as `c/2`
   """
-  def dc(files, path // ".") do
+  def dc(files, path \\ ".") do
     exs = Enum.filter(List.wrap(files), &String.ends_with?(&1, [".ex", ".exs"]))
     mods = Enum.flat_map(exs, fn(ex) ->
       { :ok, modlist } = IEx.Debugger.debug_compile(ex, path)
@@ -75,7 +75,7 @@ defmodule IEx.Debugger.Helpers do
   @doc """
   Lists the current debugged processes
   """
-  def dl(opts // [pretty: true]) do
+  def dl(opts \\ [pretty: true]) do
     list = IEx.Debugger.Controller.list
     if opts[:pretty] do
       Enum.each list, fn { pid, { status, file, line, expr }} ->
@@ -438,7 +438,7 @@ defmodule IEx.Debugger.Helpers do
   Produces a simple list of a directory's contents.
   If `path` points to a file, prints its full path.
   """
-  def ls(path // ".") when is_binary(path) do
+  def ls(path \\ ".") when is_binary(path) do
     path = expand_home(path)
     case File.ls(path) do
       { :ok, items } ->

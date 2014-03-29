@@ -14,7 +14,7 @@ defmodule IEx.Debugger.Shell do
   """
   @spec take_over(binary, Keyword.t, pos_integer) ::
         :ok | { :error, :self } | { :error, :no_iex } | { :error, :refused }
-  def take_over(identifier, opts, timeout // 1000, server // Server.whereis()) do
+  def take_over(identifier, opts, timeout \\ 1000, server \\ Server.whereis()) do
     cond do
       nil?(server) ->
         { :error, :no_iex }

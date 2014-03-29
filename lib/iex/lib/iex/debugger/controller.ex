@@ -13,7 +13,7 @@ defmodule IEx.Debugger.Controller do
     :global.whereis_name(name) != :undefined
   end
 
-  def start_link(opts // []) do
+  def start_link(opts \\ []) do
     { status, value } = :gen_server.start_link(@server_name, __MODULE__, opts, [])
     case status do
       :ok -> 

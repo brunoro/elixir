@@ -36,7 +36,7 @@ defmodule IEx.Debugger.Escape do
   def escape(fun) when is_function(fun) do
     fun_info = :erlang.fun_info(fun)
     fun_name = fun_info[:name] |> to_string
-                               |> String.strip("-")
+                               |> String.strip(?-)
                                |> String.replace("-", "_")
                                |> String.replace("/", "_")
 

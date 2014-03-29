@@ -9,7 +9,7 @@ defmodule IEx.Debugger.Companion do
                    pause_next: false, expr: nil]
 
   # public interface
-  def start_link(binding, env, breakpoints // []) do
+  def start_link(binding, env, breakpoints \\ []) do
     state = State[binding: binding, env: env]
     data = Data[state: state, breakpoints: breakpoints]
 
